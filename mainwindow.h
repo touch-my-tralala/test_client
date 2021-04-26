@@ -5,6 +5,7 @@
 #include <QTcpSocket>
 #include <QMessageBox>
 #include <QtCore>
+#include <QInputDialog>
 
 namespace Ui {
 class MainWindow;
@@ -23,8 +24,15 @@ public slots:
     void slotSockDisconnected();
 
 private:
+    bool init(const QString &str);
+
+
+private:
     Ui::MainWindow *ui;
     QSharedPointer<QTcpSocket> socket;
+    QJsonParseError jsonErr;
+    QString servStartTime;
+
 };
 
 #endif // MAINWINDOW_H
