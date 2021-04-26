@@ -6,6 +6,18 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    socket = QSharedPointer<QTcpSocket>(new QTcpSocket(this));
+    connect(socket.data(), &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater); // no matching member functiom for call to 'connect'
+
+}
+
+void MainWindow::slotSockReady(){
+
+}
+
+void MainWindow::slotSockDisconnected(){
+
 }
 
 MainWindow::~MainWindow()
