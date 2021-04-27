@@ -10,49 +10,43 @@ MainWindow::MainWindow(QWidget *parent) :
     socket = QSharedPointer<QTcpSocket>(new QTcpSocket(this));
     connect(socket.data(), &QTcpSocket::readyRead, this, &MainWindow::slotSockReady);
     connect(socket.data(), &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
-
-    bool ok;
-    QString str = QInputDialog::getText(0, "Input", "Name:", QLineEdit::Normal,"Your name", &ok);
-    if(ok){
-        if(!init(str))
-            this->~MainWindow(); // может тут какой-то цикл сделать?
-    }else{
-        this->~MainWindow();
-    }
-
+    connect(socket.data(), &QTcpSocket::hostFound, this, &MainWindow::slotHostFound);
+    socket->connectToHost("localhost", 9292);
+    // Добавить окошко "Подключение к хосту" которое висит пока не будет сигнал hostFound, затем закрывается.
 
 }
 
-bool MainWindow::init(const QString &str){
-    QJsonObject jObj;
-    jObj.insert("username", str.toLower());
-    QJsonDocument jDoc(jObj);
-    socket->connectToHost("localhost", 9292);
-    if(socket->waitForConnected(1000)){
-        qDebug() << "connect correct";
+void MainWindow::slotHostFound(){
+    bool ok;
+    QString str = QInputDialog::getText(nullptr, "Input", "Name:", QLineEdit::Normal,"Your name", &ok);
+    if(ok){
+        QJsonObject jObj;
+        jObj.insert("username", str.toLower());
+        QJsonDocument jDoc(jObj);
         socket->write(jDoc.toJson());
-        if(socket->waitForReadyRead(5000)){
+        if(socket->waitForReadyRead()){
             qDebug() << "readyRead correct";
             auto recData = QJsonDocument::fromJson(socket->readAll(), &jsonErr);
             QJsonObject json = recData.object();
             if(jsonErr.errorString() == "no error occurred" && json.contains("start_time")){
                 servStartTime = json["username"].toString();
                 QMessageBox::information(this, "Информация", "Авторизация успешна");
-                return true;
             }else{
                 qDebug() << "Constructor. Json err " + jsonErr.errorString();
                 // Здесь помимо отказа доступа сервер может просто долго отвечать(хоть это и маловероятно)
                 // стоит подумать.
                 QMessageBox::information(this, "Информация", "В доступе отказано");
-                return false;
+                this->close();
             }
         }else{
-            return false;
+            qDebug() << "readyRead uncorrect";
+            this->close();
         }
     }else{
-        QMessageBox::information(this, "Информация", "Сервер недоступен");
-        return false;
+        qDebug() <<"Close";
+        this->close();
     }
+
 
     // как дождаться ответа от сервера и потом продолжить
 
@@ -74,6 +68,7 @@ void MainWindow::slotSockDisconnected(){
 
 MainWindow::~MainWindow()
 {
-    qDebug() << "distructor";
+    qDebug() << "destructor";
+    socket ->close();
     delete ui;
 }

@@ -22,6 +22,7 @@ public:
 public slots:
     void slotSockReady();
     void slotSockDisconnected();
+    void slotHostFound();
 
 private:
     bool init(const QString &str);
