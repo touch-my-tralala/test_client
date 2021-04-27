@@ -46,10 +46,6 @@ void MainWindow::slotHostFound(){
         qDebug() <<"Close";
         this->close();
     }
-
-
-    // как дождаться ответа от сервера и потом продолжить
-
 }
 
 void MainWindow::slotSockReady(){
