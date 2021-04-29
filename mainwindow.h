@@ -7,8 +7,12 @@
 #include <QtCore>
 #include <QInputDialog>
 
+
+
 namespace Ui {
 class MainWindow;
+
+#define READ_BLOCK_SIZE 32768
 }
 
 class MainWindow : public QMainWindow
@@ -22,10 +26,11 @@ public:
 public slots:
     void slotSockReady();
     void slotSockDisconnected();
-    void slotHostFound();
+    void slotConnected();
 
 private:
     bool init(const QString &str);
+    void json_handler(const QJsonObject &jObj);
 
 
 private:
@@ -33,6 +38,7 @@ private:
     QSharedPointer<QTcpSocket> socket;
     QJsonParseError jsonErr;
     QString servStartTime;
+    QByteArray buff;
 
 };
 
