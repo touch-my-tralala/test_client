@@ -19,6 +19,22 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
+    struct ResInf{
+        ResInf(){}
+        ResInf(QString usr, int hh, int mm, int ss){
+            currenUser = usr;
+            time = new QTime(hh, mm, ss);
+        }
+        ~ResInf(){
+            delete time;
+            time = nullptr;
+        }
+
+        QString currenUser = "Free";
+        QTime* time = nullptr;
+    };
+
+
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -31,13 +47,20 @@ public slots:
 private:
     bool init(const QString &str);
     void json_handler(const QJsonObject &jObj);
+    void autorization(const QJsonObject &jObj);
+    void res_intercept(const QJsonObject &jObj);
+    void req_responce(const QJsonObject &jObj);
+    void table_update(const QJsonObject &jObj);
+    void fail_to_connect();
+    void filling_table();
 
 
 private:
+    QMap<quint8, ResInf*> m_resList;
     Ui::MainWindow *ui;
-    QSharedPointer<QTcpSocket> socket;
     QJsonParseError jsonErr;
-    QString servStartTime;
+    QSharedPointer<QTcpSocket> socket;
+    QSharedPointer<QDateTime> servStartTime;
     QByteArray buff;
 
 };

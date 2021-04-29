@@ -95,13 +95,15 @@
        <number>4</number>
       </property>
       <property name="columnCount">
-       <number>3</number>
+       <number>2</number>
       </property>
+      <attribute name="horizontalHeaderDefaultSectionSize">
+       <number>198</number>
+      </attribute>
       <row/>
       <row/>
       <row/>
       <row/>
-      <column/>
       <column/>
       <column/>
      </widget>
