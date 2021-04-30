@@ -14,7 +14,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(socket.data(), &QTcpSocket::readyRead, this, &MainWindow::slotSockReady);
     connect(socket.data(), &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
     connect(socket.data(), &QTcpSocket::connected, this, &MainWindow::slotConnected);
-    socket->connectToHost("localhost", 6666);
+    socket->connectToHost("localhost", 9292);
     // Добавить окошко "Подключение к хосту" которое висит пока не будет сигнал hostFound, затем закрывается.
     statusBar()->showMessage("Waiting for connection to host");
 }
@@ -27,6 +27,7 @@ void MainWindow::slotConnected(){
     if(ok){
         statusBar()->showMessage("Authorization request");
         QJsonObject jObj;
+        jObj.insert("type", "authorization");
         jObj.insert("username", str.toLower());
         QJsonDocument jDoc(jObj);
         socket->write(jDoc.toJson());
@@ -48,10 +49,11 @@ void MainWindow::slotSockReady(){
     }
     // FIXME надо добавить то, что если буфер превышает по размеру какое-то значение полностью его очищать
     auto jDoc = QJsonDocument::fromJson(buff, &jsonErr);
-    if(jsonErr.errorString() == QJsonParseError::UnterminatedObject){
+    if(jsonErr.error == QJsonParseError::UnterminatedObject){
+        qDebug() << jsonErr.errorString();
         return;
     }
-    if(jsonErr.errorString() == QJsonParseError::NoError){
+    if(jsonErr.error == QJsonParseError::NoError){
         json_handler(jDoc.object());
         buff.clear();
     }
@@ -105,8 +107,9 @@ void MainWindow::autorization(const QJsonObject &jObj){
         hh = static_cast<int>(start_time.left(2).toInt());
         mm = static_cast<int>(start_time.mid(3, 2).toInt());
         ss = static_cast<int>(start_time.right(2).toInt());
-        m_resList.insert( i.toInt(), new ResInf(usrIdx->toString(), hh, mm, ss) );
+        m_resList.insert( static_cast<quint8>(i.toInt()), new ResInf(usrIdx->toString(), hh, mm, ss) );
     }
+    filling_table();
 }
 
 
@@ -134,8 +137,9 @@ void MainWindow::table_update(const QJsonObject &jObj){
         hh = static_cast<int>(usrTime.left(2).toInt());
         mm = static_cast<int>(usrTime.mid(3, 2).toInt());
         ss = static_cast<int>(usrTime.right(2).toInt());
-        m_resList.insert( i.toInt(), new ResInf(usrIdx->toString(), hh, mm, ss) );
+        m_resList.insert( static_cast<quint8>(i.toInt()), new ResInf(usrIdx->toString(), hh, mm, ss) );
     }
+    filling_table();
 }
 
 
