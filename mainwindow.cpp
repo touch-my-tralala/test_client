@@ -9,6 +9,8 @@ MainWindow::MainWindow(QWidget *parent) :
     QStringList headerLabel;
     headerLabel << "Res num" << "Res user";
     ui->tableWidget->setHorizontalHeaderLabels(headerLabel);
+    headerLabel << "Busy time" << "Take";
+    ui->tableWidget_2->setHorizontalHeaderLabels(headerLabel);
 
     socket = QSharedPointer<QTcpSocket>(new QTcpSocket(this));
     connect(socket.data(), &QTcpSocket::readyRead, this, &MainWindow::slotSockReady);
@@ -25,12 +27,12 @@ void MainWindow::slotConnected(){
     bool ok;
     QString str = QInputDialog::getText(nullptr, "Input", "Name:", QLineEdit::Normal,"Your name", &ok);
     if(ok){
+        usrName = str.toLower();
         statusBar()->showMessage("Authorization request");
         QJsonObject jObj;
         jObj.insert("type", "authorization");
-        jObj.insert("username", str.toLower());
-        QJsonDocument jDoc(jObj);
-        socket->write(jDoc.toJson());
+        jObj.insert("username", usrName);
+        send_to_host(jObj);
    }else{
         qDebug() << "Cancel btn pressed";
         close();
@@ -61,7 +63,8 @@ void MainWindow::slotSockReady(){
 
 
 void MainWindow::slotSockDisconnected(){
-
+    statusBar()->showMessage("Lost connection to host");
+//    ui->pushButton_2->show();
 }
 
 
@@ -88,7 +91,7 @@ void MainWindow::autorization(const QJsonObject &jObj){
     statusBar()->showMessage("Autorization successfully");
     QString start_time = jObj["start_time"].toString();
     QJsonArray resNum = jObj["resnum"].toArray();
-    QJsonArray resUsr = jObj["reuser"].toArray();
+    QJsonArray resUsr = jObj["resuser"].toArray();
     QJsonArray busyTime = jObj["busyTime"].toArray();
     int dd = static_cast<int>(start_time.left(2).toInt());
     int MM = static_cast<int>(start_time.mid(3, 2).toInt());
@@ -100,14 +103,29 @@ void MainWindow::autorization(const QJsonObject &jObj){
     QTime servTime(hh, mm, ss);
     servStartTime = QSharedPointer<QDateTime>(new QDateTime(servDate, servTime));
 
-    QJsonArray::const_iterator usrIdx = resNum.begin();
+    QJsonArray::const_iterator usrIdx = resUsr.begin();
     QJsonArray::const_iterator timeIdx = busyTime.begin();
     for(auto i : resNum){
+        ui->tableWidget->insertRow(i.toInt());
+        ui->tableWidget_2->insertRow(i.toInt());
+        QTableWidgetItem a(QCheckBox);
+        // настройка чекбокса
+        QWidget *checkBoxWidget = new QWidget();
+        QCheckBox *checkBox = new QCheckBox();
+        QHBoxLayout *layoutCheckBox = new QHBoxLayout(checkBoxWidget); // слой с привязкой к виджету
+        layoutCheckBox->addWidget(checkBox);            // чекбокс в слой
+        layoutCheckBox->setAlignment(Qt::AlignCenter);  // Отцентровка чекбокса
+        layoutCheckBox->setContentsMargins(0,0,0,0);    // Устанавка нулевых отступов
+        checkBox->setChecked(false);
+        ui->tableWidget_2->setCellWidget(i.toInt(), 3, checkBoxWidget);
+
         start_time = timeIdx->toString();
         hh = static_cast<int>(start_time.left(2).toInt());
         mm = static_cast<int>(start_time.mid(3, 2).toInt());
         ss = static_cast<int>(start_time.right(2).toInt());
         m_resList.insert( static_cast<quint8>(i.toInt()), new ResInf(usrIdx->toString(), hh, mm, ss) );
+        timeIdx++;
+        usrIdx++;
     }
     filling_table();
 }
@@ -152,17 +170,83 @@ void MainWindow::filling_table(){
     int row = 0;
     QMap<quint8, ResInf*>::const_iterator i;
 
-    for(i = m_resList.begin(); i != m_resList.end(); ++i){ // FIXME как получить количество колонок?
+    for(i = m_resList.begin(); i != m_resList.end(); ++i){ // FIXME как получить количество колонок?        
         // Обновление первой таблицы
-        ui->tableWidget->setItem(row, 0, new QTableWidgetItem(i.key()));
+        ui->tableWidget->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
         ui->tableWidget->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
 
         // Обновление второй таблицы
-        ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem(i.key()));
+        ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
         ui->tableWidget_2->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
         ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss"))); // FIXME изменить на вычисление времени сколько занимается пользователем. возможно она вообще не тут должны быть.
 
         row ++;
+    }
+        //ui->tableWidget->resizeColumnsToContents();
+        //ui->tableWidget_2->resizeColumnsToContents();
+}
+
+
+void MainWindow::on_takeRes_btn_clicked()
+{
+    quint32 req = 0;  // если будет больше 4 ресурсов, то хрень полная
+    QCheckBox *checkBox;
+    for(quint8 i=0; i<m_resList.size(); i++){
+        checkBox = qobject_cast<QCheckBox*>(ui->tableWidget_2->cellWidget(i, 4));
+        if(checkBox->isChecked()){
+            req = req | (1 << (i * 8));
+            checkBox->setChecked(false);
+        }
+    }
+    QJsonObject jObj;
+    jObj.insert("type", "res_request");
+    jObj.insert("action", "take");
+    jObj.insert("username", usrName);
+    jObj.insert("time", QTime::currentTime().toString("hh:mm:ss"));
+    jObj.insert("request", QString::number(req));
+    send_to_host(jObj);
+}
+
+
+void MainWindow::on_clearRes_btn_clicked()
+{
+    quint32 req = 0;  // если будет больше 4 ресурсов, то хрень полная
+    QCheckBox *checkBox;
+    for(quint8 i=0; i<m_resList.size(); i++){
+        checkBox = qobject_cast<QCheckBox*>(ui->tableWidget_2->cellWidget(i, 4));
+        if(checkBox->isChecked()){
+            req = req | (1 << (i * 8));
+            checkBox->setChecked(false);
+        }
+    }
+    QJsonObject jObj;
+    jObj.insert("type", "res_request");
+    jObj.insert("action", "free");
+    jObj.insert("username", usrName);
+    jObj.insert("time", QTime::currentTime().toString("hh:mm:ss"));
+    jObj.insert("request", QString::number(req));
+    send_to_host(jObj);
+}
+
+
+void MainWindow::on_clearAllRes_btn_clicked()
+{
+    quint32 req = 0;  // если будет больше 4 ресурсов, то хрень полная
+    for(quint8 i=0; i<m_resList.size(); i++){
+        req = req | (1 << (i * 8));
+    }
+    QJsonObject jObj;
+    jObj.insert("type", "clear_res");
+    send_to_host(jObj);
+}
+
+
+void MainWindow::send_to_host(const QJsonObject &jObj){
+    if(socket->state() == QTcpSocket::ConnectedState){
+        QJsonDocument jDoc(jObj);
+        socket->write(jDoc.toJson());
+    }else{
+        qDebug() << "Socket not connected";
     }
 }
 

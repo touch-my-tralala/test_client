@@ -6,7 +6,7 @@
 #include <QMessageBox>
 #include <QtCore>
 #include <QInputDialog>
-
+#include <QHBoxLayout>
 
 
 namespace Ui {
@@ -44,6 +44,14 @@ public slots:
     void slotSockDisconnected();
     void slotConnected();
 
+
+private slots:
+    void on_takeRes_btn_clicked();
+
+    void on_clearRes_btn_clicked();
+
+    void on_clearAllRes_btn_clicked();
+
 private:
     bool init(const QString &str);
     void json_handler(const QJsonObject &jObj);
@@ -53,9 +61,11 @@ private:
     void table_update(const QJsonObject &jObj);
     void fail_to_connect();
     void filling_table();
+    void send_to_host(const QJsonObject &jObj);
 
 
 private:
+    QString usrName;
     QMap<quint8, ResInf*> m_resList;
     Ui::MainWindow *ui;
     QJsonParseError jsonErr;
