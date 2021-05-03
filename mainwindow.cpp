@@ -6,6 +6,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    ui->reconnect_btn->hide(); // Кнопка повторной попытки подключения к серверу
     QStringList headerLabel;
     headerLabel << "Res num" << "Res user";
     ui->tableWidget->setHorizontalHeaderLabels(headerLabel);
@@ -19,6 +20,14 @@ MainWindow::MainWindow(QWidget *parent) :
     socket->connectToHost("localhost", 9292);
     // Добавить окошко "Подключение к хосту" которое висит пока не будет сигнал hostFound, затем закрывается.
     statusBar()->showMessage("Waiting for connection to host");
+}
+
+
+MainWindow::~MainWindow()
+{
+    qDebug() << "destructor";
+    socket ->close();
+    delete ui;
 }
 
 
@@ -63,8 +72,9 @@ void MainWindow::slotSockReady(){
 
 
 void MainWindow::slotSockDisconnected(){
-    statusBar()->showMessage("Lost connection to host");
-//    ui->pushButton_2->show();
+    statusBar()->showMessage("Lost connection to host.");
+    socket->close();
+    ui->reconnect_btn->show();
 }
 
 
@@ -132,12 +142,37 @@ void MainWindow::autorization(const QJsonObject &jObj){
 
 
 void MainWindow::res_intercept(const QJsonObject &jObj){
-
+    QJsonArray grabResNum = jObj["resnum"].toArray();
+    QString respocne = "Resource(s) num:";
+    for(auto i : grabResNum){
+        respocne += ' ' + i.toString();
+    }
+    respocne += " were intercepted.";
+    statusBar()->showMessage(respocne);
 }
 
 
 void MainWindow::req_responce(const QJsonObject &jObj){
-
+    QJsonArray resNum = jObj["resource"].toArray();
+    QJsonArray resStatus = jObj["status"].toArray();
+    QString respocne;
+    QString take, notTake;
+    for(int i = 0; i < resNum.size(); i++){
+        if(resStatus[i].toInt() == 1){
+            take += resNum[i].toString() + ", ";
+        }else{
+            notTake += resNum[i].toString() + ", ";
+        }
+    }
+    if(take.size() > 0){
+        take.remove(take.size()-2, 2);
+        respocne += "Resources(s) num: " + take + " are busy successfully.";
+    }
+    if(notTake.size() > 0){
+        notTake.remove(notTake.size()-2, 2);
+        respocne += "Resources(s) num: " + notTake + " access denied.";
+    }
+    statusBar()->showMessage(respocne);
 }
 
 
@@ -163,6 +198,7 @@ void MainWindow::table_update(const QJsonObject &jObj){
 
 void MainWindow::fail_to_connect(){
     statusBar()->showMessage("Authorization is not successful. Your IP in ban list");
+    ui->reconnect_btn->show();
 }
 
 
@@ -241,6 +277,13 @@ void MainWindow::on_clearAllRes_btn_clicked()
 }
 
 
+void MainWindow::on_reconnect_btn_clicked()
+{
+    socket->connectToHost("localhost", 9292);
+    ui->reconnect_btn->hide();
+}
+
+
 void MainWindow::send_to_host(const QJsonObject &jObj){
     if(socket->state() == QTcpSocket::ConnectedState){
         QJsonDocument jDoc(jObj);
@@ -248,11 +291,4 @@ void MainWindow::send_to_host(const QJsonObject &jObj){
     }else{
         qDebug() << "Socket not connected";
     }
-}
-
-MainWindow::~MainWindow()
-{
-    qDebug() << "destructor";
-    socket ->close();
-    delete ui;
 }

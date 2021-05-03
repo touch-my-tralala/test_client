@@ -52,6 +52,8 @@ private slots:
 
     void on_clearAllRes_btn_clicked();
 
+    void on_reconnect_btn_clicked();
+
 private:
     bool init(const QString &str);
     void json_handler(const QJsonObject &jObj);
