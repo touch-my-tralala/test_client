@@ -1,6 +1,8 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+// 1) как сделать маштабируемость адекватную, а не константный размер.
+// 2) переделать обновление таблицы. Сейчас при дисконекте контент таблицы удаляется, затем при подключении создатся заново. Норм чи не?
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -12,11 +14,14 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->tableWidget->setHorizontalHeaderLabels(headerLabel);
     headerLabel << "Busy time" << "Take";
     ui->tableWidget_2->setHorizontalHeaderLabels(headerLabel);
-
+    timer = QSharedPointer<QTimer>(new QTimer);
+    timer->setInterval(1000);
+    servStartTime = QSharedPointer<QDateTime>(new QDateTime());
     socket = QSharedPointer<QTcpSocket>(new QTcpSocket(this));
     connect(socket.data(), &QTcpSocket::readyRead, this, &MainWindow::slotSockReady);
     connect(socket.data(), &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
     connect(socket.data(), &QTcpSocket::connected, this, &MainWindow::slotConnected);
+    connect(timer.data(), &QTimer::timeout, this, &MainWindow::time_update);
     socket->connectToHost("localhost", 9292);
     // Добавить окошко "Подключение к хосту" которое висит пока не будет сигнал hostFound, затем закрывается.
     statusBar()->showMessage("Waiting for connection to host");
@@ -25,7 +30,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
 MainWindow::~MainWindow()
 {
-    qDebug() << "destructor";
     socket ->close();
     delete ui;
 }
@@ -111,7 +115,8 @@ void MainWindow::autorization(const QJsonObject &jObj){
     int ss = static_cast<int>(start_time.right(4).toInt());
     QDate servDate(yyyy, MM, dd);
     QTime servTime(hh, mm, ss);
-    servStartTime = QSharedPointer<QDateTime>(new QDateTime(servDate, servTime));
+    servStartTime->setDate(servDate);
+    servStartTime->setTime(servTime);
 
     QJsonArray::const_iterator usrIdx = resUsr.begin();
     QJsonArray::const_iterator timeIdx = busyTime.begin();
@@ -120,6 +125,7 @@ void MainWindow::autorization(const QJsonObject &jObj){
         ui->tableWidget_2->insertRow(i.toInt());
         QTableWidgetItem a(QCheckBox);
         // настройка чекбокса
+        // FIXME надо удалять это говно в деструкторе?
         QWidget *checkBoxWidget = new QWidget();
         QCheckBox *checkBox = new QCheckBox();
         QHBoxLayout *layoutCheckBox = new QHBoxLayout(checkBoxWidget); // слой с привязкой к виджету
@@ -128,6 +134,15 @@ void MainWindow::autorization(const QJsonObject &jObj){
         layoutCheckBox->setContentsMargins(0,0,0,0);    // Устанавка нулевых отступов
         checkBox->setChecked(false);
         ui->tableWidget_2->setCellWidget(i.toInt(), 3, checkBoxWidget);
+        // FIXME почему то программа крашится если использовать умные указатели. А они нужны тут вобще?
+//        QSharedPointer<QWidget> checkBoxWidget = QSharedPointer<QWidget>(new QWidget());
+//        QSharedPointer<QCheckBox> checkBox = QSharedPointer<QCheckBox>(new QCheckBox());
+//        QSharedPointer<QHBoxLayout> layoutCheckBox = QSharedPointer<QHBoxLayout>(new QHBoxLayout(checkBoxWidget.data())); // слой с привязкой к виджету
+//        checkBox->setChecked(false);
+//        layoutCheckBox->addWidget(checkBox.data());
+//        layoutCheckBox->setAlignment(Qt::AlignCenter);
+//        layoutCheckBox->setContentsMargins(0, 0, 0, 0);
+//        ui->tableWidget_2->setCellWidget(i.toInt(), 3, checkBoxWidget.data());
 
         start_time = timeIdx->toString();
         hh = static_cast<int>(start_time.left(2).toInt());
@@ -137,7 +152,22 @@ void MainWindow::autorization(const QJsonObject &jObj){
         timeIdx++;
         usrIdx++;
     }
-    filling_table();
+    timer->start();
+    int row = 0;
+    QMap<quint8, ResInf*>::const_iterator i;
+
+    for(i = m_resList.begin(); i != m_resList.end(); ++i){
+        // Обновление первой таблицы
+        ui->tableWidget->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
+        ui->tableWidget->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
+
+        // Обновление второй таблицы
+        ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
+        ui->tableWidget_2->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
+        ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss"))); // FIXME изменить на вычисление времени сколько занимается пользователем. возможно она вообще не тут должны быть.
+
+        row ++;
+    }
 }
 
 
@@ -205,17 +235,21 @@ void MainWindow::fail_to_connect(){
 void MainWindow::filling_table(){
     int row = 0;
     QMap<quint8, ResInf*>::const_iterator i;
-
-    for(i = m_resList.begin(); i != m_resList.end(); ++i){ // FIXME как получить количество колонок?        
+    QString busyTime;
+    for(i = m_resList.begin(); i != m_resList.end(); ++i){
         // Обновление первой таблицы
-        ui->tableWidget->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
-        ui->tableWidget->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
+        ui->tableWidget->item(row, 0)->setData( Qt::DisplayRole, QString::number(i.key()) );
+        ui->tableWidget->item(row, 1)->setData(Qt::DisplayRole, i.value()->currenUser);
 
         // Обновление второй таблицы
-        ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
-        ui->tableWidget_2->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
-        ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss"))); // FIXME изменить на вычисление времени сколько занимается пользователем. возможно она вообще не тут должны быть.
-
+        ui->tableWidget_2->item(row, 0)->setData( Qt::DisplayRole, QString::number(i.key()) );
+        ui->tableWidget_2->item(row, 1)->setData(Qt::DisplayRole, i.value()->currenUser);
+        if(i.value()->currenUser != "Free"){
+            busyTime = QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60);
+            ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, busyTime);
+        }else{
+            ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, "00:00:00");
+        }
         row ++;
     }
         //ui->tableWidget->resizeColumnsToContents();
@@ -276,11 +310,71 @@ void MainWindow::on_clearAllRes_btn_clicked()
     send_to_host(jObj);
 }
 
-
+// FIXME кнопка пропадает, надо поставить таймер на повторное подключение после которого снова разрешать переподключаться.
 void MainWindow::on_reconnect_btn_clicked()
 {
     socket->connectToHost("localhost", 9292);
     ui->reconnect_btn->hide();
+}
+
+
+void MainWindow::on_setTime_btn_clicked()
+{
+    QString timeEdit = ui->timeEdit->time().toString(); // format hh:mm:ss
+    qint64 secs = timeEdit.left(2).toInt() * 3600 + timeEdit.mid(3, 2).toInt() * 60 + timeEdit.right(2).toInt();
+    QJsonObject jObj;
+    jObj.insert("action", "occupancy_time");
+    jObj.insert("value", QString::number(secs));
+    send_to_host(jObj);
+}
+
+
+void MainWindow::on_rejectResReq_chkBox_stateChanged(int arg1)
+{
+    QJsonObject jObj;
+    jObj.insert("action", "reject_res_req");
+    jObj.insert("value", arg1);
+    send_to_host(jObj);
+}
+
+
+void MainWindow::on_rejectNewConn_chkBox_stateChanged(int arg1)
+{
+    QJsonObject jObj;
+    jObj.insert("action", "reject_connections");
+    jObj.insert("value", arg1);
+    send_to_host(jObj);
+}
+
+
+void MainWindow::time_update()
+{
+    if(socket->isValid()){
+        dayPassed = servStartTime->daysTo(QDateTime::currentDateTime());  // количество дней работы сервера
+        secsPassed = servStartTime->time().secsTo(QTime::currentTime());  // количество секунд работы сервера в текущем дне
+        QString labelText = "Время работы сервера: " + QString::number(dayPassed) + "-й день, и "
+                + QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60) + " часов";
+        ui->label->setText(labelText);
+
+        qint64 secs;
+        QString busyTime;
+        int row = 0;
+        QMap<quint8, ResInf*>::const_iterator i;
+        for(i = m_resList.begin(); i != m_resList.end(); ++i){
+            if(i.value()->currenUser != "Free"){
+                secs = i.value()->time->secsTo(QTime::currentTime());
+                busyTime = QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60);
+                ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, busyTime);
+            }
+            row ++;
+        }
+        timer->start();
+    }else{
+        ui->label->setText("Сервер не доступен.");
+        ui->tableWidget->clearContents();
+        ui->tableWidget_2->clearContents();
+        timer->stop();
+    }
 }
 
 
@@ -292,3 +386,9 @@ void MainWindow::send_to_host(const QJsonObject &jObj){
         qDebug() << "Socket not connected";
     }
 }
+
+
+
+
+
+
