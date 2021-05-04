@@ -68,7 +68,8 @@ void MainWindow::slotSockReady(){
         qDebug() << jsonErr.errorString();
         return;
     }
-    if(jsonErr.error == QJsonParseError::NoError){
+    qDebug() << jsonErr.errorString();
+    if(jsonErr.error == QJsonParseError::NoError){ // почему при второй и более принятом говне вместо NoError имеем NoSuchValue
         json_handler(jDoc.object());
         buff.clear();
     }
@@ -84,6 +85,7 @@ void MainWindow::slotSockDisconnected(){
 
 void MainWindow::json_handler(const QJsonObject &jObj){
     auto jType = jObj["type"].toString();
+    qDebug() << jType;
     if(jType == "authorization")
         autorization(jObj);
 
@@ -259,11 +261,11 @@ void MainWindow::filling_table(){
 
 void MainWindow::on_takeRes_btn_clicked()
 {
-    quint32 req = 0;  // если будет больше 4 ресурсов, то хрень полная
-    QCheckBox *checkBox;
+    int req = 0;  // если будет больше 4 ресурсов, то хрень полная
+    QCheckBox *checkBox = nullptr;
     for(quint8 i=0; i<m_resList.size(); i++){
-        checkBox = qobject_cast<QCheckBox*>(ui->tableWidget_2->cellWidget(i, 4));
-        if(checkBox->isChecked()){
+        checkBox = ui->tableWidget_2->cellWidget(i, 3)->findChild<QCheckBox*>(); // FIXME или лучше qobect_cast<QCheckBox*>(ui->tableWidget_2->cellWidget(i, 3))
+        if(checkBox && checkBox->isChecked()){
             req = req | (1 << (i * 8));
             checkBox->setChecked(false);
         }
@@ -272,9 +274,10 @@ void MainWindow::on_takeRes_btn_clicked()
     jObj.insert("type", "res_request");
     jObj.insert("action", "take");
     jObj.insert("username", usrName);
-    jObj.insert("time", QTime::currentTime().toString("hh:mm:ss"));
-    jObj.insert("request", QString::number(req));
+    jObj.insert("time", QTime::currentTime().second());
+    jObj.insert("request", req);
     send_to_host(jObj);
+    delete checkBox; // FIXME ??
 }
 
 
