@@ -2,7 +2,10 @@
 #include "ui_mainwindow.h"
 
 // 1) как сделать маштабируемость адекватную, а не константный размер.
-// 2) переделать обновление таблицы. Сейчас при дисконекте контент таблицы удаляется, затем при подключении создатся заново. Норм чи не?
+// 2) время работы и время ресурсов.
+// 3) кнопку очистить все
+// 4) проверить перехват ресурсов
+// 5) проверить кнопки service
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -69,6 +72,7 @@ void MainWindow::slotSockReady(){
         return;
     }
     qDebug() << jsonErr.errorString();
+    qDebug() << jDoc.toJson();
     if(jsonErr.error == QJsonParseError::NoError){ // почему при второй и более принятом говне вместо NoError имеем NoSuchValue
         json_handler(jDoc.object());
         buff.clear();
@@ -92,8 +96,14 @@ void MainWindow::json_handler(const QJsonObject &jObj){
     if(jType == "grab_res")
         res_intercept(jObj);
 
-    if(jType == "request_responce")
-        req_responce(jObj);
+    if(jType == "request_responce"){
+        if(jObj["action"].toString() == "take")
+            req_responce_take(jObj);
+        else if(jObj["action"].toString() == "free")
+            req_responce_free(jObj);
+        else
+            qDebug() << "res_request not contain action: " + jObj["action"].toString();
+    }
 
     if(jType == "broadcast")
         table_update(jObj);
@@ -125,17 +135,7 @@ void MainWindow::autorization(const QJsonObject &jObj){
     for(auto i : resNum){
         ui->tableWidget->insertRow(i.toInt());
         ui->tableWidget_2->insertRow(i.toInt());
-        QTableWidgetItem a(QCheckBox);
-        // настройка чекбокса
-        // FIXME надо удалять это говно в деструкторе?
-        QWidget *checkBoxWidget = new QWidget();
-        QCheckBox *checkBox = new QCheckBox();
-        QHBoxLayout *layoutCheckBox = new QHBoxLayout(checkBoxWidget); // слой с привязкой к виджету
-        layoutCheckBox->addWidget(checkBox);            // чекбокс в слой
-        layoutCheckBox->setAlignment(Qt::AlignCenter);  // Отцентровка чекбокса
-        layoutCheckBox->setContentsMargins(0,0,0,0);    // Устанавка нулевых отступов
-        checkBox->setChecked(false);
-        ui->tableWidget_2->setCellWidget(i.toInt(), 3, checkBoxWidget);
+
         // FIXME почему то программа крашится если использовать умные указатели. А они нужны тут вобще?
 //        QSharedPointer<QWidget> checkBoxWidget = QSharedPointer<QWidget>(new QWidget());
 //        QSharedPointer<QCheckBox> checkBox = QSharedPointer<QCheckBox>(new QCheckBox());
@@ -158,15 +158,27 @@ void MainWindow::autorization(const QJsonObject &jObj){
     int row = 0;
     QMap<quint8, ResInf*>::const_iterator i;
 
+    // FIXME это наверное надо перенести в цикл который выше, нафиг надо 2 цикла
     for(i = m_resList.begin(); i != m_resList.end(); ++i){
-        // Обновление первой таблицы
+        // заполнение первой таблицы
         ui->tableWidget->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
         ui->tableWidget->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
 
-        // Обновление второй таблицы
+        // заполнение второй таблицы
         ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
         ui->tableWidget_2->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
         ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss"))); // FIXME изменить на вычисление времени сколько занимается пользователем. возможно она вообще не тут должны быть.
+
+        // настройка чекбокса
+        // FIXME надо удалять это говно в деструкторе?
+        QWidget *checkBoxWidget = new QWidget();
+        QCheckBox *checkBox = new QCheckBox();
+        QHBoxLayout *layoutCheckBox = new QHBoxLayout(checkBoxWidget); // слой с привязкой к виджету
+        layoutCheckBox->addWidget(checkBox);            // чекбокс в слой
+        layoutCheckBox->setAlignment(Qt::AlignCenter);  // Отцентровка чекбокса
+        layoutCheckBox->setContentsMargins(0,0,0,0);    // Устанавка нулевых отступов
+        checkBox->setChecked(false);
+        ui->tableWidget_2->setCellWidget(row, 3, checkBoxWidget);
 
         row ++;
     }
@@ -184,16 +196,17 @@ void MainWindow::res_intercept(const QJsonObject &jObj){
 }
 
 
-void MainWindow::req_responce(const QJsonObject &jObj){
-    QJsonArray resNum = jObj["resource"].toArray();
+void MainWindow::req_responce_take(const QJsonObject &jObj){
+    table_update(jObj);
+    QJsonArray resReq = jObj["resource_responce"].toArray();
     QJsonArray resStatus = jObj["status"].toArray();
     QString respocne;
     QString take, notTake;
-    for(int i = 0; i < resNum.size(); i++){
+    for(int i = 0; i < resReq.size(); i++){
         if(resStatus[i].toInt() == 1){
-            take += resNum[i].toString() + ", ";
+            take += QString::number(resReq[i].toInt()) + ", ";
         }else{
-            notTake += resNum[i].toString() + ", ";
+            notTake += QString::number(resReq[i].toInt()) + ", ";
         }
     }
     if(take.size() > 0){
@@ -208,21 +221,44 @@ void MainWindow::req_responce(const QJsonObject &jObj){
 }
 
 
+void MainWindow::req_responce_free(const QJsonObject &jObj){
+    table_update(jObj);
+    QJsonArray resReq = jObj["resource_responce"].toArray();
+    QJsonArray resStatus = jObj["status"].toArray();
+    QString respocne;
+    QString free, notFree;
+    for(int i = 0; i < resReq.size(); i++){
+        if(resStatus[i].toInt() == 1){
+            free += QString::number(resReq[i].toInt()) + ", ";
+        }else{
+            notFree += QString::number(resReq[i].toInt()) + ", ";
+        }
+    }
+    if(free.size() > 0){
+        free.remove(free.size()-2, 2);
+        respocne += "Resources(s) num: " + free + " are free successfully.";
+    }
+    if(notFree.size() > 0){
+        notFree.remove(notFree.size()-2, 2);
+        respocne += "Resources(s) num: " + notFree + " access denied.";
+    }
+    statusBar()->showMessage(respocne);
+}
+
+
 void MainWindow::table_update(const QJsonObject &jObj){
     QString usrTime;
-    QJsonArray resNum = jObj["resnum"].toArray();
-    QJsonArray resUsr = jObj["reuser"].toArray();
+    //QJsonArray resNum = jObj["resnum"].toArray();
+    QJsonArray resUsr = jObj["resuser"].toArray();
     QJsonArray busyTime = jObj["busyTime"].toArray();
-    QJsonArray::const_iterator usrIdx = resNum.begin();
-    QJsonArray::const_iterator timeIdx = busyTime.begin();
     int hh, mm, ss;
-
-    for(auto i : resNum){
-        usrTime = timeIdx->toString();
+    for(quint8 i = 0; i <m_resList.size(); i++){
+        usrTime = busyTime[i].toString();
         hh = static_cast<int>(usrTime.left(2).toInt());
         mm = static_cast<int>(usrTime.mid(3, 2).toInt());
         ss = static_cast<int>(usrTime.right(2).toInt());
-        m_resList.insert( static_cast<quint8>(i.toInt()), new ResInf(usrIdx->toString(), hh, mm, ss) );
+        m_resList[i]->currenUser = resUsr[i].toString();
+        m_resList[i]->time->setHMS(hh, mm, ss);
     }
     filling_table();
 }
@@ -261,44 +297,49 @@ void MainWindow::filling_table(){
 
 void MainWindow::on_takeRes_btn_clicked()
 {
-    int req = 0;  // если будет больше 4 ресурсов, то хрень полная
+    qint64 req = 0;  // если будет больше 4 ресурсов, то хрень полная
     QCheckBox *checkBox = nullptr;
-    for(quint8 i=0; i<m_resList.size(); i++){
-        checkBox = ui->tableWidget_2->cellWidget(i, 3)->findChild<QCheckBox*>(); // FIXME или лучше qobect_cast<QCheckBox*>(ui->tableWidget_2->cellWidget(i, 3))
+    for(quint8 i=0; i<m_resList.size(); ++i){
+        checkBox = ui->tableWidget_2->cellWidget(i, 3)->findChild<QCheckBox*>();
         if(checkBox && checkBox->isChecked()){
             req = req | (1 << (i * 8));
             checkBox->setChecked(false);
         }
     }
-    QJsonObject jObj;
-    jObj.insert("type", "res_request");
-    jObj.insert("action", "take");
-    jObj.insert("username", usrName);
-    jObj.insert("time", QTime::currentTime().second());
-    jObj.insert("request", req);
-    send_to_host(jObj);
-    delete checkBox; // FIXME ??
+    if(req){
+        QTime time(0, 0, 0);
+        QJsonObject jObj;
+        jObj.insert("type", "res_request");
+        jObj.insert("action", "take");
+        jObj.insert("username", usrName);
+        jObj.insert("time", time.secsTo(QTime::currentTime())); // не верно
+        jObj.insert("request", req);
+        send_to_host(jObj);
+    }
+    checkBox = nullptr; //  FIXME: это надо делать чи нет?
 }
 
 
 void MainWindow::on_clearRes_btn_clicked()
 {
-    quint32 req = 0;  // если будет больше 4 ресурсов, то хрень полная
-    QCheckBox *checkBox;
+    qint64 req = 0;  // если будет больше 4 ресурсов, то хрень полная
+    QCheckBox *checkBox = nullptr;
     for(quint8 i=0; i<m_resList.size(); i++){
-        checkBox = qobject_cast<QCheckBox*>(ui->tableWidget_2->cellWidget(i, 4));
-        if(checkBox->isChecked()){
+        checkBox = ui->tableWidget_2->cellWidget(i, 3)->findChild<QCheckBox*>();
+        if(checkBox && checkBox->isChecked()){
             req = req | (1 << (i * 8));
             checkBox->setChecked(false);
         }
     }
-    QJsonObject jObj;
-    jObj.insert("type", "res_request");
-    jObj.insert("action", "free");
-    jObj.insert("username", usrName);
-    jObj.insert("time", QTime::currentTime().toString("hh:mm:ss"));
-    jObj.insert("request", QString::number(req));
-    send_to_host(jObj);
+    if(req){
+        QJsonObject jObj;
+        jObj.insert("type", "res_request");
+        jObj.insert("action", "free");
+        jObj.insert("username", usrName);
+        jObj.insert("request", req);
+        send_to_host(jObj);
+    }
+    checkBox = nullptr;
 }
 
 

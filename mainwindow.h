@@ -63,7 +63,8 @@ private:
     void json_handler(const QJsonObject &jObj);
     void autorization(const QJsonObject &jObj);
     void res_intercept(const QJsonObject &jObj);
-    void req_responce(const QJsonObject &jObj);
+    void req_responce_take(const QJsonObject &jObj);
+    void req_responce_free(const QJsonObject &jObj);
     void table_update(const QJsonObject &jObj);
     void fail_to_connect();
     void filling_table();
