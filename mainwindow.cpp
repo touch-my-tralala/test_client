@@ -6,6 +6,7 @@
 // 3) кнопку очистить все
 // 4) проверить перехват ресурсов
 // 5) проверить кнопки service
+//
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -65,17 +66,21 @@ void MainWindow::slotSockReady(){
             buff.append( socket->read(READ_BLOCK_SIZE) );
         }
     }
-    // FIXME надо добавить то, что если буфер превышает по размеру какое-то значение полностью его очищать
-    auto jDoc = QJsonDocument::fromJson(buff, &jsonErr);
-    if(jsonErr.error == QJsonParseError::UnterminatedObject){
-        qDebug() << jsonErr.errorString();
-        return;
-    }
-    qDebug() << jsonErr.errorString();
-    qDebug() << jDoc.toJson();
-    if(jsonErr.error == QJsonParseError::NoError){ // почему при второй и более принятом говне вместо NoError имеем NoSuchValue
-        json_handler(jDoc.object());
-        buff.clear();
+
+    qint64 cnt = buff.count('}');
+    for (auto i = 0; i < cnt; i++){
+        qint64 idx = buff.indexOf('}');
+        if(idx != -1){
+            QJsonDocument jDoc = QJsonDocument::fromJson(buff.left(idx+2), &jsonErr);
+            if(jsonErr.error == QJsonParseError::NoError){
+                json_handler(jDoc.object());
+                buff.remove(0, idx+2);
+            }else{
+                qDebug() << jsonErr.errorString();
+            }
+        }else{
+            qDebug() << "buff not contained '}' char";
+        }
     }
 }
 
@@ -197,7 +202,6 @@ void MainWindow::res_intercept(const QJsonObject &jObj){
 
 
 void MainWindow::req_responce_take(const QJsonObject &jObj){
-    table_update(jObj);
     QJsonArray resReq = jObj["resource_responce"].toArray();
     QJsonArray resStatus = jObj["status"].toArray();
     QString respocne;
@@ -222,7 +226,6 @@ void MainWindow::req_responce_take(const QJsonObject &jObj){
 
 
 void MainWindow::req_responce_free(const QJsonObject &jObj){
-    table_update(jObj);
     QJsonArray resReq = jObj["resource_responce"].toArray();
     QJsonArray resStatus = jObj["status"].toArray();
     QString respocne;
@@ -350,6 +353,7 @@ void MainWindow::on_clearAllRes_btn_clicked()
         req = req | (1 << (i * 8));
     }
     QJsonObject jObj;
+    jObj.insert("username", usrName);
     jObj.insert("type", "clear_res");
     send_to_host(jObj);
 }
@@ -367,6 +371,7 @@ void MainWindow::on_setTime_btn_clicked()
     QString timeEdit = ui->timeEdit->time().toString(); // format hh:mm:ss
     qint64 secs = timeEdit.left(2).toInt() * 3600 + timeEdit.mid(3, 2).toInt() * 60 + timeEdit.right(2).toInt();
     QJsonObject jObj;
+    jObj.insert("username", usrName);
     jObj.insert("action", "occupancy_time");
     jObj.insert("value", QString::number(secs));
     send_to_host(jObj);
@@ -376,6 +381,7 @@ void MainWindow::on_setTime_btn_clicked()
 void MainWindow::on_rejectResReq_chkBox_stateChanged(int arg1)
 {
     QJsonObject jObj;
+    jObj.insert("username", usrName);
     jObj.insert("action", "reject_res_req");
     jObj.insert("value", arg1);
     send_to_host(jObj);
@@ -385,6 +391,7 @@ void MainWindow::on_rejectResReq_chkBox_stateChanged(int arg1)
 void MainWindow::on_rejectNewConn_chkBox_stateChanged(int arg1)
 {
     QJsonObject jObj;
+    jObj.insert("username", usrName);
     jObj.insert("action", "reject_connections");
     jObj.insert("value", arg1);
     send_to_host(jObj);
