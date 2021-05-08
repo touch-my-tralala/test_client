@@ -2,24 +2,25 @@
 #include "ui_mainwindow.h"
 
 // 1) как сделать маштабируемость адекватную, а не константный размер.
-// 2) кнопка реконнекта
-// 3) таймер на реконнект
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    ui->reconnect_btn->hide(); // Кнопка повторной попытки подключения к серверу
+    ui->reconnect_btn->hide();
     QStringList headerLabel;
     headerLabel << "Res num" << "Res user";
     ui->tableWidget->setHorizontalHeaderLabels(headerLabel);
     headerLabel << "Busy time" << "Take";
     ui->tableWidget_2->setHorizontalHeaderLabels(headerLabel);
+
     // Таймер времени переподключения
     reconnectTimer = QSharedPointer<QTimer>(new QTimer);
     reconnectTimer->setInterval(1000);
     connect(reconnectTimer.data(), &QTimer::timeout, this, &MainWindow::timeout_recconect);
     reconnectTimer->start();
+
     // Таймер времени сервера/ресурсов
     timer = QSharedPointer<QTimer>(new QTimer);
     timer->setInterval(1000);
@@ -32,7 +33,6 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(socket.data(), &QTcpSocket::connected, this, &MainWindow::slotConnected);
 
     socket->connectToHost("localhost", 9292);
-    // Добавить окошко "Подключение к хосту" которое висит пока не будет сигнал hostFound, затем закрывается.
     statusBar()->showMessage("Waiting for connection to host");
 }
 
@@ -72,7 +72,7 @@ void MainWindow::slotSockReady(){
             buff.append( socket->read(READ_BLOCK_SIZE) );
         }
     }
-
+    // переполнение буфера
     if(buff.size()*sizeof(buff[0]) > 1000000){
         qDebug() << "Buffer size > 1 Mb";
         buff.clear();
@@ -171,11 +171,9 @@ void MainWindow::autorization(const QJsonObject &jObj){
         usrIdx++;
     }
     timer->start();
-    int row = 0;
-    QMap<quint8, ResInf*>::const_iterator i;
 
-    // FIXME это наверное надо перенести в цикл который выше, нафиг надо 2 цикла
-    for(i = m_resList.begin(); i != m_resList.end(); ++i){
+    int row = 0;
+    for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
         // заполнение первой таблицы
         ui->tableWidget->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
         ui->tableWidget->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
@@ -183,7 +181,7 @@ void MainWindow::autorization(const QJsonObject &jObj){
         // заполнение второй таблицы
         ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
         ui->tableWidget_2->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
-        ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss"))); // FIXME изменить на вычисление времени сколько занимается пользователем. возможно она вообще не тут должны быть.
+        ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss")));
 
         // настройка чекбокса
         // FIXME надо удалять это говно в деструкторе?
@@ -306,8 +304,6 @@ void MainWindow::filling_table(){
         }
         row ++;
     }
-        //ui->tableWidget->resizeColumnsToContents();
-        //ui->tableWidget_2->resizeColumnsToContents();
 }
 
 
@@ -371,7 +367,7 @@ void MainWindow::on_clearAllRes_btn_clicked()
     send_to_host(jObj);
 }
 
-// FIXME кнопка пропадает, надо поставить таймер на повторное подключение после которого снова разрешать переподключаться.
+
 void MainWindow::on_reconnect_btn_clicked()
 {
     reconnect_sec = 0;
