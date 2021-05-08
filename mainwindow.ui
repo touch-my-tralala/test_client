@@ -44,13 +44,13 @@
     <property name="geometry">
      <rect>
       <x>450</x>
-      <y>70</y>
+      <y>90</y>
       <width>251</width>
       <height>20</height>
      </rect>
     </property>
     <property name="text">
-     <string>Отклонять входящие подключения</string>
+     <string>Отклонять запросы ресурсов</string>
     </property>
    </widget>
    <widget class="QPushButton" name="setTime_btn">
@@ -143,13 +143,13 @@
     <property name="geometry">
      <rect>
       <x>450</x>
-      <y>90</y>
+      <y>70</y>
       <width>251</width>
       <height>20</height>
      </rect>
     </property>
     <property name="text">
-     <string>Отклонять запросы ресурсов</string>
+     <string>Отклонять входящие подключения</string>
     </property>
    </widget>
    <widget class="QLabel" name="label">
@@ -205,13 +205,26 @@
     <property name="geometry">
      <rect>
       <x>510</x>
-      <y>220</y>
+      <y>250</y>
       <width>131</width>
       <height>61</height>
      </rect>
     </property>
     <property name="text">
      <string>Reconnect</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="reconnect_label">
+    <property name="geometry">
+     <rect>
+      <x>460</x>
+      <y>220</y>
+      <width>241</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Recconect time (max 30 sec):</string>
     </property>
    </widget>
   </widget>

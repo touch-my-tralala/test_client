@@ -2,11 +2,8 @@
 #include "ui_mainwindow.h"
 
 // 1) как сделать маштабируемость адекватную, а не константный размер.
-// 2) время работы и время ресурсов.
-// 3) кнопку очистить все
-// 4) проверить перехват ресурсов
-// 5) проверить кнопки service
-//
+// 2) кнопка реконнекта
+// 3) таймер на реконнект
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -18,14 +15,22 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->tableWidget->setHorizontalHeaderLabels(headerLabel);
     headerLabel << "Busy time" << "Take";
     ui->tableWidget_2->setHorizontalHeaderLabels(headerLabel);
+    // Таймер времени переподключения
+    reconnectTimer = QSharedPointer<QTimer>(new QTimer);
+    reconnectTimer->setInterval(1000);
+    connect(reconnectTimer.data(), &QTimer::timeout, this, &MainWindow::timeout_recconect);
+    reconnectTimer->start();
+    // Таймер времени сервера/ресурсов
     timer = QSharedPointer<QTimer>(new QTimer);
     timer->setInterval(1000);
+    connect(timer.data(), &QTimer::timeout, this, &MainWindow::time_update);
+
     servStartTime = QSharedPointer<QDateTime>(new QDateTime());
     socket = QSharedPointer<QTcpSocket>(new QTcpSocket(this));
     connect(socket.data(), &QTcpSocket::readyRead, this, &MainWindow::slotSockReady);
     connect(socket.data(), &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
     connect(socket.data(), &QTcpSocket::connected, this, &MainWindow::slotConnected);
-    connect(timer.data(), &QTimer::timeout, this, &MainWindow::time_update);
+
     socket->connectToHost("localhost", 9292);
     // Добавить окошко "Подключение к хосту" которое висит пока не будет сигнал hostFound, затем закрывается.
     statusBar()->showMessage("Waiting for connection to host");
@@ -41,6 +46,8 @@ MainWindow::~MainWindow()
 
 void MainWindow::slotConnected(){
     statusBar()->showMessage("Сonnect to host successfully");
+    reconnectTimer->stop();
+    ui->reconnect_label->hide();
     bool ok;
     QString str = QInputDialog::getText(nullptr, "Input", "Name:", QLineEdit::Normal,"Your name", &ok);
     if(ok){
@@ -51,7 +58,6 @@ void MainWindow::slotConnected(){
         jObj.insert("username", usrName);
         send_to_host(jObj);
    }else{
-        qDebug() << "Cancel btn pressed";
         close();
     }
 }
@@ -65,6 +71,12 @@ void MainWindow::slotSockReady(){
         for(int i=0; i<=curByteNum/READ_BLOCK_SIZE; i=i+READ_BLOCK_SIZE){
             buff.append( socket->read(READ_BLOCK_SIZE) );
         }
+    }
+
+    if(buff.size()*sizeof(buff[0]) > 1000000){
+        qDebug() << "Buffer size > 1 Mb";
+        buff.clear();
+        return;
     }
 
     qint64 cnt = buff.count('}');
@@ -94,7 +106,6 @@ void MainWindow::slotSockDisconnected(){
 
 void MainWindow::json_handler(const QJsonObject &jObj){
     auto jType = jObj["type"].toString();
-    qDebug() << jType;
     if(jType == "authorization")
         autorization(jObj);
 
@@ -134,7 +145,7 @@ void MainWindow::autorization(const QJsonObject &jObj){
     QTime servTime(hh, mm, ss);
     servStartTime->setDate(servDate);
     servStartTime->setTime(servTime);
-
+    dayPassed = servStartTime->daysTo(QDateTime::currentDateTime());  // количество дней работы сервера
     QJsonArray::const_iterator usrIdx = resUsr.begin();
     QJsonArray::const_iterator timeIdx = busyTime.begin();
     for(auto i : resNum){
@@ -191,11 +202,13 @@ void MainWindow::autorization(const QJsonObject &jObj){
 
 
 void MainWindow::res_intercept(const QJsonObject &jObj){
-    QJsonArray grabResNum = jObj["resnum"].toArray();
+    QJsonArray grabResNum = jObj["resource"].toArray();
     QString respocne = "Resource(s) num:";
+
     for(auto i : grabResNum){
-        respocne += ' ' + i.toString();
+        respocne += QString::number(i.toInt()) + ", ";
     }
+    respocne.remove(respocne.size()-2, 2);
     respocne += " were intercepted.";
     statusBar()->showMessage(respocne);
 }
@@ -206,7 +219,7 @@ void MainWindow::req_responce_take(const QJsonObject &jObj){
     QJsonArray resStatus = jObj["status"].toArray();
     QString respocne;
     QString take, notTake;
-    for(int i = 0; i < resReq.size(); i++){
+    for(auto i = 0; i < resReq.size(); i++){
         if(resStatus[i].toInt() == 1){
             take += QString::number(resReq[i].toInt()) + ", ";
         }else{
@@ -275,9 +288,8 @@ void MainWindow::fail_to_connect(){
 
 void MainWindow::filling_table(){
     int row = 0;
-    QMap<quint8, ResInf*>::const_iterator i;
     QString busyTime;
-    for(i = m_resList.begin(); i != m_resList.end(); ++i){
+    for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
         // Обновление первой таблицы
         ui->tableWidget->item(row, 0)->setData( Qt::DisplayRole, QString::number(i.key()) );
         ui->tableWidget->item(row, 1)->setData(Qt::DisplayRole, i.value()->currenUser);
@@ -286,7 +298,8 @@ void MainWindow::filling_table(){
         ui->tableWidget_2->item(row, 0)->setData( Qt::DisplayRole, QString::number(i.key()) );
         ui->tableWidget_2->item(row, 1)->setData(Qt::DisplayRole, i.value()->currenUser);
         if(i.value()->currenUser != "Free"){
-            busyTime = QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60);
+            secsPassed = i.value()->time->secsTo(QTime::currentTime());
+            busyTime = QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60);            
             ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, busyTime);
         }else{
             ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, "00:00:00");
@@ -309,7 +322,7 @@ void MainWindow::on_takeRes_btn_clicked()
             checkBox->setChecked(false);
         }
     }
-    if(req){
+    if(req){        
         QTime time(0, 0, 0);
         QJsonObject jObj;
         jObj.insert("type", "res_request");
@@ -361,8 +374,29 @@ void MainWindow::on_clearAllRes_btn_clicked()
 // FIXME кнопка пропадает, надо поставить таймер на повторное подключение после которого снова разрешать переподключаться.
 void MainWindow::on_reconnect_btn_clicked()
 {
-    socket->connectToHost("localhost", 9292);
+    reconnect_sec = 0;
+    reconnectTimer->start();
     ui->reconnect_btn->hide();
+    ui->reconnect_label->show();
+}
+
+
+void MainWindow::timeout_recconect(){
+    reconnect_sec++;
+    if(reconnect_sec <= 10){
+        if(socket && socket->state() != QTcpSocket::ConnectedState){
+            socket->connectToHost("localhost", 9292);
+            ui->reconnect_label->setText("Recconect time(max 10 sec): " + QString::number(reconnect_sec) + " s...");
+            reconnectTimer->start();
+        }else{
+            reconnect_sec = 0;
+        }
+    }else{
+        ui->reconnect_btn->show();
+        statusBar()->showMessage("You can try reconnecting.");
+        ui->reconnect_label->setText("Reconnect failing :(");
+        reconnectTimer->stop();
+    }
 }
 
 
@@ -371,9 +405,10 @@ void MainWindow::on_setTime_btn_clicked()
     QString timeEdit = ui->timeEdit->time().toString(); // format hh:mm:ss
     qint64 secs = timeEdit.left(2).toInt() * 3600 + timeEdit.mid(3, 2).toInt() * 60 + timeEdit.right(2).toInt();
     QJsonObject jObj;
+    jObj.insert("type", "service_info");
     jObj.insert("username", usrName);
     jObj.insert("action", "occupancy_time");
-    jObj.insert("value", QString::number(secs));
+    jObj.insert("value", secs);
     send_to_host(jObj);
 }
 
@@ -381,6 +416,7 @@ void MainWindow::on_setTime_btn_clicked()
 void MainWindow::on_rejectResReq_chkBox_stateChanged(int arg1)
 {
     QJsonObject jObj;
+    jObj.insert("type", "service_info");
     jObj.insert("username", usrName);
     jObj.insert("action", "reject_res_req");
     jObj.insert("value", arg1);
@@ -391,6 +427,7 @@ void MainWindow::on_rejectResReq_chkBox_stateChanged(int arg1)
 void MainWindow::on_rejectNewConn_chkBox_stateChanged(int arg1)
 {
     QJsonObject jObj;
+    jObj.insert("type", "service_info");
     jObj.insert("username", usrName);
     jObj.insert("action", "reject_connections");
     jObj.insert("value", arg1);
@@ -400,20 +437,24 @@ void MainWindow::on_rejectNewConn_chkBox_stateChanged(int arg1)
 
 void MainWindow::time_update()
 {
-    if(socket->isValid()){
-        dayPassed = servStartTime->daysTo(QDateTime::currentDateTime());  // количество дней работы сервера
+    if(socket->state() == QTcpSocket::ConnectedState){
+        // время и дата сервера
         secsPassed = servStartTime->time().secsTo(QTime::currentTime());  // количество секунд работы сервера в текущем дне
+        if (secsPassed >= 86399 || secsPassed < 0){
+            dayPassed++;
+            secsPassed = 0;
+        }
+
         QString labelText = "Время работы сервера: " + QString::number(dayPassed) + "-й день, и "
                 + QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60) + " часов";
         ui->label->setText(labelText);
 
-        qint64 secs;
+        // время ресурсов
         QString busyTime;
         int row = 0;
-        QMap<quint8, ResInf*>::const_iterator i;
-        for(i = m_resList.begin(); i != m_resList.end(); ++i){
+        for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
             if(i.value()->currenUser != "Free"){
-                secs = i.value()->time->secsTo(QTime::currentTime());
+                secsPassed = i.value()->time->secsTo(QTime::currentTime());
                 busyTime = QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60);
                 ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, busyTime);
             }
