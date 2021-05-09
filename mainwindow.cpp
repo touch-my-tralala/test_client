@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+
 // 1) как сделать маштабируемость адекватную, а не константный размер.
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -10,9 +11,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     ui->reconnect_btn->hide();
     QStringList headerLabel;
-    headerLabel << "Res num" << "Res user";
-    ui->tableWidget->setHorizontalHeaderLabels(headerLabel);
-    headerLabel << "Busy time" << "Take";
+    headerLabel << "Res num" << "Res user" << "Busy time" << "Take";
     ui->tableWidget_2->setHorizontalHeaderLabels(headerLabel);
 
     // Таймер времени переподключения
@@ -22,11 +21,10 @@ MainWindow::MainWindow(QWidget *parent) :
     reconnectTimer->start();
 
     // Таймер времени сервера/ресурсов
-    timer = QSharedPointer<QTimer>(new QTimer);
+    timer = QSharedPointer<QTimer>(new QTimer());
     timer->setInterval(1000);
     connect(timer.data(), &QTimer::timeout, this, &MainWindow::time_update);
 
-    servStartTime = QSharedPointer<QDateTime>(new QDateTime());
     socket = QSharedPointer<QTcpSocket>(new QTcpSocket(this));
     connect(socket.data(), &QTcpSocket::readyRead, this, &MainWindow::slotSockReady);
     connect(socket.data(), &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
@@ -47,14 +45,12 @@ MainWindow::~MainWindow()
 void MainWindow::slotConnected(){
     statusBar()->showMessage("Сonnect to host successfully");
     reconnectTimer->stop();
-    ui->reconnect_label->hide();
     bool ok;
     QString str = QInputDialog::getText(nullptr, "Input", "Name:", QLineEdit::Normal,"Your name", &ok);
     if(ok){
         usrName = str.toLower();
         statusBar()->showMessage("Authorization request");
         QJsonObject jObj;
-        jObj.insert("type", "authorization");
         jObj.insert("username", usrName);
         send_to_host(jObj);
    }else{
@@ -131,25 +127,14 @@ void MainWindow::json_handler(const QJsonObject &jObj){
 
 void MainWindow::autorization(const QJsonObject &jObj){
     statusBar()->showMessage("Autorization successfully");
-    QString start_time = jObj["start_time"].toString();
     QJsonArray resNum = jObj["resnum"].toArray();
     QJsonArray resUsr = jObj["resuser"].toArray();
     QJsonArray busyTime = jObj["busyTime"].toArray();
-    int dd = static_cast<int>(start_time.left(2).toInt());
-    int MM = static_cast<int>(start_time.mid(3, 2).toInt());
-    int yyyy = static_cast<int>(start_time.mid(6, 4).toInt());
-    int hh = static_cast<int>(start_time.mid(11, 2).toInt());
-    int mm = static_cast<int>(start_time.mid(14, 2).toInt());
-    int ss = static_cast<int>(start_time.right(4).toInt());
-    QDate servDate(yyyy, MM, dd);
-    QTime servTime(hh, mm, ss);
-    servStartTime->setDate(servDate);
-    servStartTime->setTime(servTime);
-    dayPassed = servStartTime->daysTo(QDateTime::currentDateTime());  // количество дней работы сервера
+    int hh, mm, ss;
+    QString res_time;
     QJsonArray::const_iterator usrIdx = resUsr.begin();
     QJsonArray::const_iterator timeIdx = busyTime.begin();
     for(auto i : resNum){
-        ui->tableWidget->insertRow(i.toInt());
         ui->tableWidget_2->insertRow(i.toInt());
 
         // FIXME почему то программа крашится если использовать умные указатели. А они нужны тут вобще?
@@ -162,10 +147,10 @@ void MainWindow::autorization(const QJsonObject &jObj){
 //        layoutCheckBox->setContentsMargins(0, 0, 0, 0);
 //        ui->tableWidget_2->setCellWidget(i.toInt(), 3, checkBoxWidget.data());
 
-        start_time = timeIdx->toString();
-        hh = static_cast<int>(start_time.left(2).toInt());
-        mm = static_cast<int>(start_time.mid(3, 2).toInt());
-        ss = static_cast<int>(start_time.right(2).toInt());
+        res_time = timeIdx->toString();
+        hh = static_cast<int>(res_time.left(2).toInt());
+        mm = static_cast<int>(res_time.mid(3, 2).toInt());
+        ss = static_cast<int>(res_time.right(2).toInt());
         m_resList.insert( static_cast<quint8>(i.toInt()), new ResInf(usrIdx->toString(), hh, mm, ss) );
         timeIdx++;
         usrIdx++;
@@ -174,11 +159,7 @@ void MainWindow::autorization(const QJsonObject &jObj){
 
     int row = 0;
     for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
-        // заполнение первой таблицы
-        ui->tableWidget->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
-        ui->tableWidget->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
-
-        // заполнение второй таблицы
+        // заполнение таблицы
         ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
         ui->tableWidget_2->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
         ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss")));
@@ -202,7 +183,6 @@ void MainWindow::autorization(const QJsonObject &jObj){
 void MainWindow::res_intercept(const QJsonObject &jObj){
     QJsonArray grabResNum = jObj["resource"].toArray();
     QString respocne = "Resource(s) num:";
-
     for(auto i : grabResNum){
         respocne += QString::number(i.toInt()) + ", ";
     }
@@ -262,7 +242,6 @@ void MainWindow::req_responce_free(const QJsonObject &jObj){
 
 void MainWindow::table_update(const QJsonObject &jObj){
     QString usrTime;
-    //QJsonArray resNum = jObj["resnum"].toArray();
     QJsonArray resUsr = jObj["resuser"].toArray();
     QJsonArray busyTime = jObj["busyTime"].toArray();
     int hh, mm, ss;
@@ -288,10 +267,6 @@ void MainWindow::filling_table(){
     int row = 0;
     QString busyTime;
     for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
-        // Обновление первой таблицы
-        ui->tableWidget->item(row, 0)->setData( Qt::DisplayRole, QString::number(i.key()) );
-        ui->tableWidget->item(row, 1)->setData(Qt::DisplayRole, i.value()->currenUser);
-
         // Обновление второй таблицы
         ui->tableWidget_2->item(row, 0)->setData( Qt::DisplayRole, QString::number(i.key()) );
         ui->tableWidget_2->item(row, 1)->setData(Qt::DisplayRole, i.value()->currenUser);
@@ -321,7 +296,6 @@ void MainWindow::on_takeRes_btn_clicked()
     if(req){        
         QTime time(0, 0, 0);
         QJsonObject jObj;
-        jObj.insert("type", "res_request");
         jObj.insert("action", "take");
         jObj.insert("username", usrName);
         jObj.insert("time", time.secsTo(QTime::currentTime())); // не верно
@@ -345,7 +319,6 @@ void MainWindow::on_clearRes_btn_clicked()
     }
     if(req){
         QJsonObject jObj;
-        jObj.insert("type", "res_request");
         jObj.insert("action", "free");
         jObj.insert("username", usrName);
         jObj.insert("request", req);
@@ -355,25 +328,11 @@ void MainWindow::on_clearRes_btn_clicked()
 }
 
 
-void MainWindow::on_clearAllRes_btn_clicked()
-{
-    quint32 req = 0;  // если будет больше 4 ресурсов, то хрень полная
-    for(quint8 i=0; i<m_resList.size(); i++){
-        req = req | (1 << (i * 8));
-    }
-    QJsonObject jObj;
-    jObj.insert("username", usrName);
-    jObj.insert("type", "clear_res");
-    send_to_host(jObj);
-}
-
-
 void MainWindow::on_reconnect_btn_clicked()
 {
     reconnect_sec = 0;
     reconnectTimer->start();
     ui->reconnect_btn->hide();
-    ui->reconnect_label->show();
 }
 
 
@@ -382,69 +341,22 @@ void MainWindow::timeout_recconect(){
     if(reconnect_sec <= 10){
         if(socket && socket->state() != QTcpSocket::ConnectedState){
             socket->connectToHost("localhost", 9292);
-            ui->reconnect_label->setText("Recconect time(max 10 sec): " + QString::number(reconnect_sec) + " s...");
+            statusBar()->showMessage("Recconect time(max 10 sec): " + QString::number(reconnect_sec) + " s...");
             reconnectTimer->start();
         }else{
             reconnect_sec = 0;
         }
     }else{
         ui->reconnect_btn->show();
-        statusBar()->showMessage("You can try reconnecting.");
-        ui->reconnect_label->setText("Reconnect failing :(");
+        statusBar()->showMessage("Reconnect failing :(");
         reconnectTimer->stop();
     }
-}
-
-
-void MainWindow::on_setTime_btn_clicked()
-{
-    QString timeEdit = ui->timeEdit->time().toString(); // format hh:mm:ss
-    qint64 secs = timeEdit.left(2).toInt() * 3600 + timeEdit.mid(3, 2).toInt() * 60 + timeEdit.right(2).toInt();
-    QJsonObject jObj;
-    jObj.insert("type", "service_info");
-    jObj.insert("username", usrName);
-    jObj.insert("action", "occupancy_time");
-    jObj.insert("value", secs);
-    send_to_host(jObj);
-}
-
-
-void MainWindow::on_rejectResReq_chkBox_stateChanged(int arg1)
-{
-    QJsonObject jObj;
-    jObj.insert("type", "service_info");
-    jObj.insert("username", usrName);
-    jObj.insert("action", "reject_res_req");
-    jObj.insert("value", arg1);
-    send_to_host(jObj);
-}
-
-
-void MainWindow::on_rejectNewConn_chkBox_stateChanged(int arg1)
-{
-    QJsonObject jObj;
-    jObj.insert("type", "service_info");
-    jObj.insert("username", usrName);
-    jObj.insert("action", "reject_connections");
-    jObj.insert("value", arg1);
-    send_to_host(jObj);
 }
 
 
 void MainWindow::time_update()
 {
     if(socket->state() == QTcpSocket::ConnectedState){
-        // время и дата сервера
-        secsPassed = servStartTime->time().secsTo(QTime::currentTime());  // количество секунд работы сервера в текущем дне
-        if (secsPassed >= 86399 || secsPassed < 0){
-            dayPassed++;
-            secsPassed = 0;
-        }
-
-        QString labelText = "Время работы сервера: " + QString::number(dayPassed) + "-й день, и "
-                + QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60) + " часов";
-        ui->label->setText(labelText);
-
         // время ресурсов
         QString busyTime;
         int row = 0;
@@ -458,8 +370,7 @@ void MainWindow::time_update()
         }
         timer->start();
     }else{
-        ui->label->setText("Сервер не доступен.");
-        ui->tableWidget->clearContents();
+        statusBar()->showMessage("Сервер не доступен.");
         ui->tableWidget_2->clearContents();
         timer->stop();
     }
