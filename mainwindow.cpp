@@ -13,6 +13,7 @@ MainWindow::MainWindow(QWidget *parent) :
     QStringList headerLabel;
     headerLabel << "Res num" << "Res user" << "Busy time" << "Take";
     ui->tableWidget_2->setHorizontalHeaderLabels(headerLabel);
+    ui->tableWidget_2->setRowCount(0);
 
     // Таймер времени переподключения
     reconnectTimer = QSharedPointer<QTimer>(new QTimer);
@@ -134,8 +135,8 @@ void MainWindow::autorization(const QJsonObject &jObj){
     QString res_time;
     QJsonArray::const_iterator usrIdx = resUsr.begin();
     QJsonArray::const_iterator timeIdx = busyTime.begin();
+    quint8 j;
     for(auto i : resNum){
-        ui->tableWidget_2->insertRow(i.toInt());
 
         // FIXME почему то программа крашится если использовать умные указатели. А они нужны тут вобще?
 //        QSharedPointer<QWidget> checkBoxWidget = QSharedPointer<QWidget>(new QWidget());
@@ -146,12 +147,21 @@ void MainWindow::autorization(const QJsonObject &jObj){
 //        layoutCheckBox->setAlignment(Qt::AlignCenter);
 //        layoutCheckBox->setContentsMargins(0, 0, 0, 0);
 //        ui->tableWidget_2->setCellWidget(i.toInt(), 3, checkBoxWidget.data());
-
-        res_time = timeIdx->toString();
-        hh = static_cast<int>(res_time.left(2).toInt());
-        mm = static_cast<int>(res_time.mid(3, 2).toInt());
-        ss = static_cast<int>(res_time.right(2).toInt());
-        m_resList.insert( static_cast<quint8>(i.toInt()), new ResInf(usrIdx->toString(), hh, mm, ss) );
+        j = static_cast<quint8>(i.toInt());
+        if(m_resList.contains(j) ){
+            res_time = timeIdx->toString();
+            hh = static_cast<int>(res_time.left(2).toInt());
+            mm = static_cast<int>(res_time.mid(3, 2).toInt());
+            ss = static_cast<int>(res_time.right(2).toInt());
+            m_resList[j]->currenUser = usrIdx->toString();
+            m_resList[j]->time->setHMS(hh, mm , ss);
+        }else{
+            res_time = timeIdx->toString();
+            hh = static_cast<int>(res_time.left(2).toInt());
+            mm = static_cast<int>(res_time.mid(3, 2).toInt());
+            ss = static_cast<int>(res_time.right(2).toInt());
+            m_resList.insert(j, new ResInf(usrIdx->toString(), hh, mm, ss) );
+        }
         timeIdx++;
         usrIdx++;
     }
@@ -160,21 +170,24 @@ void MainWindow::autorization(const QJsonObject &jObj){
     int row = 0;
     for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
         // заполнение таблицы
-        ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
-        ui->tableWidget_2->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
-        ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss")));
+        if(row >= ui->tableWidget_2->rowCount()){
+            ui->tableWidget_2->insertRow(row);
 
-        // настройка чекбокса
-        // FIXME надо удалять это говно в деструкторе?
-        QWidget *checkBoxWidget = new QWidget();
-        QCheckBox *checkBox = new QCheckBox();
-        QHBoxLayout *layoutCheckBox = new QHBoxLayout(checkBoxWidget); // слой с привязкой к виджету
-        layoutCheckBox->addWidget(checkBox);            // чекбокс в слой
-        layoutCheckBox->setAlignment(Qt::AlignCenter);  // Отцентровка чекбокса
-        layoutCheckBox->setContentsMargins(0,0,0,0);    // Устанавка нулевых отступов
-        checkBox->setChecked(false);
-        ui->tableWidget_2->setCellWidget(row, 3, checkBoxWidget);
+            ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
+            ui->tableWidget_2->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
+            ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss")));
 
+            // настройка чекбокса
+            // FIXME надо удалять это говно в деструкторе?
+            QWidget *checkBoxWidget = new QWidget();
+            QCheckBox *checkBox = new QCheckBox();
+            QHBoxLayout *layoutCheckBox = new QHBoxLayout(checkBoxWidget); // слой с привязкой к виджету
+            layoutCheckBox->addWidget(checkBox);            // чекбокс в слой
+            layoutCheckBox->setAlignment(Qt::AlignCenter);  // Отцентровка чекбокса
+            layoutCheckBox->setContentsMargins(0,0,0,0);    // Устанавка нулевых отступов
+            checkBox->setChecked(false);
+            ui->tableWidget_2->setCellWidget(row, 3, checkBoxWidget);
+        }
         row ++;
     }
 }
@@ -267,7 +280,7 @@ void MainWindow::filling_table(){
     int row = 0;
     QString busyTime;
     for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
-        // Обновление второй таблицы
+        // Обновление таблицы
         ui->tableWidget_2->item(row, 0)->setData( Qt::DisplayRole, QString::number(i.key()) );
         ui->tableWidget_2->item(row, 1)->setData(Qt::DisplayRole, i.value()->currenUser);
         if(i.value()->currenUser != "Free"){
