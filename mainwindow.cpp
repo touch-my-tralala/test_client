@@ -52,7 +52,7 @@ void MainWindow::slotConnected(){
         usrName = str.toLower();
         statusBar()->showMessage("Authorization request");
         QJsonObject jObj;
-        jObj.insert("username", usrName);
+        jObj.insert(JSON_KEYS::Common().user_name, usrName);
         send_to_host(jObj);
    }else{
         close();
@@ -102,35 +102,35 @@ void MainWindow::slotSockDisconnected(){
 
 
 void MainWindow::json_handler(const QJsonObject &jObj){
-    auto jType = jObj["type"].toString();
-    if(jType == "authorization")
+    auto jType = jObj[JSON_KEYS::ReqType().type].toString();
+    if(jType == JSON_KEYS::ReqType().authorization)
         autorization(jObj);
 
-    if(jType == "grab_res")
+    if(jType == JSON_KEYS::ReqType().grab_res)
         res_intercept(jObj);
 
-    if(jType == "request_responce"){
-        if(jObj["action"].toString() == "take")
+    if(jType == JSON_KEYS::ReqType().request_responce){
+        if(jObj[JSON_KEYS::Action().action].toString() == JSON_KEYS::Action().take)
             req_responce_take(jObj);
-        else if(jObj["action"].toString() == "free")
+        else if(jObj[JSON_KEYS::Action().action].toString() == JSON_KEYS::Action().leave)
             req_responce_free(jObj);
         else
-            qDebug() << "res_request not contain action: " + jObj["action"].toString();
+            qDebug() << "res_request not contain action: " + jObj[JSON_KEYS::Action().action].toString();
     }
 
-    if(jType == "broadcast")
+    if(jType == JSON_KEYS::ReqType().broadcast)
         table_update(jObj);
 
-    if(jType == "connect_fail")
+    if(jType == JSON_KEYS::ReqType().connect_fail)
         fail_to_connect();
 }
 
 
 void MainWindow::autorization(const QJsonObject &jObj){
     statusBar()->showMessage("Autorization successfully");
-    QJsonArray resNum = jObj["resnum"].toArray();
-    QJsonArray resUsr = jObj["resuser"].toArray();
-    QJsonArray busyTime = jObj["busyTime"].toArray();
+    QJsonArray resNum = jObj[JSON_KEYS::Common().resnum].toArray();
+    QJsonArray resUsr = jObj[JSON_KEYS::Common().resuser].toArray();
+    QJsonArray busyTime = jObj[JSON_KEYS::Common().busy_time].toArray();
     int hh, mm, ss;
     QString res_time;
     QJsonArray::const_iterator usrIdx = resUsr.begin();
@@ -194,7 +194,7 @@ void MainWindow::autorization(const QJsonObject &jObj){
 
 
 void MainWindow::res_intercept(const QJsonObject &jObj){
-    QJsonArray grabResNum = jObj["resource"].toArray();
+    QJsonArray grabResNum = jObj[JSON_KEYS::Common().resource].toArray();
     QString respocne = "Resource(s) num:";
     for(auto i : grabResNum){
         respocne += QString::number(i.toInt()) + ", ";
@@ -206,8 +206,8 @@ void MainWindow::res_intercept(const QJsonObject &jObj){
 
 
 void MainWindow::req_responce_take(const QJsonObject &jObj){
-    QJsonArray resReq = jObj["resource_responce"].toArray();
-    QJsonArray resStatus = jObj["status"].toArray();
+    QJsonArray resReq = jObj[JSON_KEYS::Common().resource_responce].toArray();
+    QJsonArray resStatus = jObj[JSON_KEYS::Common().status].toArray();
     QString respocne;
     QString take, notTake;
     for(auto i = 0; i < resReq.size(); i++){
@@ -230,8 +230,8 @@ void MainWindow::req_responce_take(const QJsonObject &jObj){
 
 
 void MainWindow::req_responce_free(const QJsonObject &jObj){
-    QJsonArray resReq = jObj["resource_responce"].toArray();
-    QJsonArray resStatus = jObj["status"].toArray();
+    QJsonArray resReq = jObj[JSON_KEYS::Common().resource_responce].toArray();
+    QJsonArray resStatus = jObj[JSON_KEYS::Common().status].toArray();
     QString respocne;
     QString free, notFree;
     for(int i = 0; i < resReq.size(); i++){
@@ -255,8 +255,8 @@ void MainWindow::req_responce_free(const QJsonObject &jObj){
 
 void MainWindow::table_update(const QJsonObject &jObj){
     QString usrTime;
-    QJsonArray resUsr = jObj["resuser"].toArray();
-    QJsonArray busyTime = jObj["busyTime"].toArray();
+    QJsonArray resUsr = jObj[JSON_KEYS::Common().resuser].toArray();
+    QJsonArray busyTime = jObj[JSON_KEYS::Common().busy_time].toArray();
     int hh, mm, ss;
     for(quint8 i = 0; i <m_resList.size(); i++){
         usrTime = busyTime[i].toString();
@@ -283,7 +283,7 @@ void MainWindow::filling_table(){
         // Обновление таблицы
         ui->tableWidget_2->item(row, 0)->setData( Qt::DisplayRole, QString::number(i.key()) );
         ui->tableWidget_2->item(row, 1)->setData(Qt::DisplayRole, i.value()->currenUser);
-        if(i.value()->currenUser != "Free"){
+        if(i.value()->currenUser != JSON_KEYS::State().free){
             secsPassed = i.value()->time->secsTo(QTime::currentTime());
             busyTime = QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60);            
             ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, busyTime);
@@ -309,10 +309,10 @@ void MainWindow::on_takeRes_btn_clicked()
     if(req){        
         QTime time(0, 0, 0);
         QJsonObject jObj;
-        jObj.insert("action", "take");
-        jObj.insert("username", usrName);
-        jObj.insert("time", time.secsTo(QTime::currentTime())); // не верно
-        jObj.insert("request", req);
+        jObj.insert(JSON_KEYS::Action().action, JSON_KEYS::Action().take);
+        jObj.insert(JSON_KEYS::Common().user_name, usrName);
+        jObj.insert(JSON_KEYS::Common().time, time.secsTo(QTime::currentTime())); // не верно
+        jObj.insert(JSON_KEYS::ReqType().res_request, req);
         send_to_host(jObj);
     }
     checkBox = nullptr; //  FIXME: это надо делать чи нет?
@@ -332,9 +332,9 @@ void MainWindow::on_clearRes_btn_clicked()
     }
     if(req){
         QJsonObject jObj;
-        jObj.insert("action", "free");
-        jObj.insert("username", usrName);
-        jObj.insert("request", req);
+        jObj.insert(JSON_KEYS::Action().action, JSON_KEYS::Action().leave);
+        jObj.insert(JSON_KEYS::Common().user_name, usrName);
+        jObj.insert(JSON_KEYS::ReqType().res_request, req);
         send_to_host(jObj);
     }
     checkBox = nullptr;
@@ -374,7 +374,7 @@ void MainWindow::time_update()
         QString busyTime;
         int row = 0;
         for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
-            if(i.value()->currenUser != "Free"){
+            if(i.value()->currenUser != JSON_KEYS::State().free){
                 secsPassed = i.value()->time->secsTo(QTime::currentTime());
                 busyTime = QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60);
                 ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, busyTime);

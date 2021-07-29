@@ -1,6 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "json_keys/json_keys.h"
 #include <QMainWindow>
 #include <QTcpSocket>
 #include <QMessageBox>

@@ -6,7 +6,6 @@
 
 QT       += core gui
 QT       += network
-QT       += core
 QT       += widgets
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
@@ -29,10 +28,15 @@ CONFIG += c++11
 
 SOURCES += \
         main.cpp \
-        mainwindow.cpp
+        mainwindow.cpp \
+        table_model/mytablewidget.cpp \
+        table_model/tablemodel.cpp
 
 HEADERS += \
-        mainwindow.h
+        json_keys/json_keys.h \
+        mainwindow.h \
+        table_model/mytablewidget.h \
+        table_model/tablemodel.h
 
 FORMS += \
         mainwindow.ui
