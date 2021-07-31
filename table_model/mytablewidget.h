@@ -3,18 +3,25 @@
 
 #include <QWidget>
 #include <QTableView>
+#include <QTime>
 
 #include "table_model/tablemodel.h"
 
-class MyTableWidget : QTableView
+class MyTableWidget : public QTableView
 {
     Q_OBJECT
 
 public:
     MyTableWidget(QWidget *parent = nullptr);
-    bool appendRes(const QString& resName){ return m_model->appendRes(resName);}
-    bool setUser(const QString& resName, const QString& usrName){ return m_model->setUser(resName, usrName);}
-    bool setTime(const QString& resName, const QString& resTime){ return m_model->setTime(resName, resTime);}
+    //! \brief Изменение данных в таблице
+    //! \param[tableData] <имя ресурса, <имя пользователя, время>>
+    void updateTableData(const QMap<QString, QPair<QString, QTime>> &tableData);
+    //! \brief Изменение времени текущего использования ресурса
+    //! \param[secs] время в секундах, прошедшее с момента занятия ресурса
+    void updateBusyTime(const QString &resName, const int &secs);
+    //! \brief Запрос выделенных строк таблицы
+    //! \return список выделенных строк таблицы
+    QStringList getSelected(){ return m_model->getSelected();}
 
 private:
     TableModel* m_model;

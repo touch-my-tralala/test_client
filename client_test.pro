@@ -33,7 +33,7 @@ SOURCES += \
         table_model/tablemodel.cpp
 
 HEADERS += \
-        json_keys/json_keys.h \
+        json_keys/keys.h \
         mainwindow.h \
         table_model/mytablewidget.h \
         table_model/tablemodel.h

@@ -62,7 +62,7 @@ bool TableModel::setData(const QModelIndex& index, const QVariant& value, int ro
     if (!index.isValid() || m_table_row.count() <= index.row() || role == Qt::EditRole)
         return false;
     if (role == Qt::CheckStateRole)
-        setChecked(index, value.toBool());
+        set_checked(index, value.toBool());
     else
         m_table_row[index.row()][Column(index.column())] = value;
 
@@ -84,7 +84,7 @@ Qt::ItemFlags TableModel::flags(const QModelIndex& index) const
     return flags;
 }
 
-void TableModel::setChecked(const QModelIndex& index, bool val)
+void TableModel::set_checked(const QModelIndex& index, bool val)
 {
     m_table_row[index.row()][SELECTED] = val;
 }
@@ -105,6 +105,13 @@ bool TableModel::appendRes(const QString& resName)
     m_table_row.append(resurs);
     endInsertRows();
     return true;
+}
+
+void TableModel::removeAllRows()
+{
+    beginRemoveRows(QModelIndex(), 0, m_table_row.size()-1);
+    m_table_row.clear();
+    endRemoveRows();
 }
 
 
@@ -134,24 +141,13 @@ bool TableModel::setTime(const QString& resName, const QString& resTime)
     return false;
 }
 
-QStringList TableModel::removeSelected()
+QStringList TableModel::getSelected()
 {
-    int         k = 0;
     QStringList rmvUsers;
-    for (auto i = m_table_row.begin(); i != m_table_row.end();)
+    for (auto i = m_table_row.begin(); i != m_table_row.end(); i++)
     {
         if (i->value(SELECTED, false).toBool())
-        {
-            beginRemoveRows(QModelIndex(), k, k);
             rmvUsers << i->value(NAME).toString();
-            i = m_table_row.erase(i);
-            endRemoveRows();
-        }
-        else
-        {
-            ++k;
-            ++i;
-        }
     }
     return rmvUsers;
 }

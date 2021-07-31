@@ -2,18 +2,21 @@
 #include "ui_mainwindow.h"
 
 
-// 1) как сделать маштабируемость адекватную, а не константный размер.
+// 1) возможность сворачиваться в трей (высокий приоритет)
+// 3) в меню надо возможность сменить пользователя (заново ввести имя), или просто сбросится до первоначалных настроек.
+// 4) нормальная система авторизация (низкий приоритет)
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
+    ini_parse("settings.ini");
+
     ui->setupUi(this);
-    ui->reconnect_btn->hide();
-    QStringList headerLabel;
-    headerLabel << "Res num" << "Res user" << "Busy time" << "Take";
-    ui->tableWidget_2->setHorizontalHeaderLabels(headerLabel);
-    ui->tableWidget_2->setRowCount(0);
+    ui->reconnectButton->hide();
+
+    m_table_w = new MyTableWidget();
+    ui->tableLayout->addWidget(m_table_w);
 
     // Таймер времени переподключения
     reconnectTimer = QSharedPointer<QTimer>(new QTimer);
@@ -31,14 +34,24 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(socket.data(), &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
     connect(socket.data(), &QTcpSocket::connected, this, &MainWindow::slotConnected);
 
-    socket->connectToHost("localhost", 9292);
+    socket->connectToHost(m_address, m_port);
     statusBar()->showMessage("Waiting for connection to host");
 }
 
 
 MainWindow::~MainWindow()
 {
+    sett->beginGroup(KEYS::Config().settings);
+    sett->setValue(KEYS::Config().port, m_port);
+    sett->setValue(KEYS::Config().address, m_address.toString());
+    sett->endGroup();
+
+    sett->beginGroup(KEYS::Config().user_settings);
+    sett->setValue(KEYS::Config().name, m_name);
+    sett->endGroup();
+
     socket ->close();
+    delete m_table_w;
     delete ui;
 }
 
@@ -46,29 +59,40 @@ MainWindow::~MainWindow()
 void MainWindow::slotConnected(){
     statusBar()->showMessage("Сonnect to host successfully");
     reconnectTimer->stop();
+
+    // имя считано из конфига
+    if(m_name.size() > 0){
+        QJsonObject jObj({{KEYS::Json().user_name, m_name}});
+        send_to_host(jObj);
+        return;
+    }
+
     bool ok;
     QString str = QInputDialog::getText(nullptr, "Input", "Name:", QLineEdit::Normal,"Your name", &ok);
     if(ok){
-        usrName = str.toLower();
+        m_name = str.toLower();
         statusBar()->showMessage("Authorization request");
-        QJsonObject jObj;
-        jObj.insert(JSON_KEYS::Common().user_name, usrName);
+        QJsonObject jObj({{KEYS::Json().user_name, m_name}});
         send_to_host(jObj);
    }else{
         close();
-    }
+   }
 }
 
 
-void MainWindow::slotSockReady(){
+void MainWindow::slotSockReady()
+{
+
     qint64 curByteNum = socket->bytesAvailable();
+    qDebug();
+    curByteNum = socket->bytesAvailable();
     if(curByteNum <= READ_BLOCK_SIZE){
         buff.append(socket->read(curByteNum));
-    }else{
-        for(int i=0; i<=curByteNum/READ_BLOCK_SIZE; i=i+READ_BLOCK_SIZE){
-            buff.append( socket->read(READ_BLOCK_SIZE) );
-        }
+    }else{        
+        for(int i=0, e =curByteNum/READ_BLOCK_SIZE; i<= e; i++)
+            buff.append( socket->read(READ_BLOCK_SIZE));
     }
+
     // переполнение буфера
     if(buff.size()*sizeof(buff[0]) > 1000000){
         qDebug() << "Buffer size > 1 Mb";
@@ -76,278 +100,134 @@ void MainWindow::slotSockReady(){
         return;
     }
 
-    qint64 cnt = buff.count('}');
-    for (auto i = 0; i < cnt; i++){
-        qint64 idx = buff.indexOf('}');
-        if(idx != -1){
-            QJsonDocument jDoc = QJsonDocument::fromJson(buff.left(idx+2), &jsonErr);
-            if(jsonErr.error == QJsonParseError::NoError){
-                json_handler(jDoc.object());
-                buff.remove(0, idx+2);
-            }else{
-                qDebug() << jsonErr.errorString();
-            }
-        }else{
-            qDebug() << "buff not contained '}' char";
-        }
+    QJsonDocument jDoc = QJsonDocument::fromJson(buff, &jsonErr);
+    if(jsonErr.error == QJsonParseError::NoError){
+         json_handler(jDoc.object());
+    }else{
+         qDebug() << jsonErr.errorString();
+         buff.clear();
+         return;
     }
+    buff.clear();
 }
 
 
-void MainWindow::slotSockDisconnected(){
+
+
+
+void MainWindow::slotSockDisconnected()
+{
     statusBar()->showMessage("Lost connection to host.");
     socket->close();
-    ui->reconnect_btn->show();
+    ui->reconnectButton->show();
 }
 
 
-void MainWindow::json_handler(const QJsonObject &jObj){
-    auto jType = jObj[JSON_KEYS::ReqType().type].toString();
-    if(jType == JSON_KEYS::ReqType().authorization)
-        autorization(jObj);
+void MainWindow::json_handler(const QJsonObject &jObj)
+{
+    auto jType = jObj[KEYS::Json().type].toString();
 
-    if(jType == JSON_KEYS::ReqType().grab_res)
+    if(jType == KEYS::Json().connect_fail)
+        fail_to_connect();
+
+    if(jType == KEYS::Json().authorization)
+        autorization();
+
+    if(jType == KEYS::Json().grab_res)
         res_intercept(jObj);
 
-    if(jType == JSON_KEYS::ReqType().request_responce){
-        if(jObj[JSON_KEYS::Action().action].toString() == JSON_KEYS::Action().take)
-            req_responce_take(jObj);
-        else if(jObj[JSON_KEYS::Action().action].toString() == JSON_KEYS::Action().leave)
-            req_responce_free(jObj);
-        else
-            qDebug() << "res_request not contain action: " + jObj[JSON_KEYS::Action().action].toString();
-    }
+    if(jType == KEYS::Json().request_responce)
+        req_responce(jObj);
 
-    if(jType == JSON_KEYS::ReqType().broadcast)
-        table_update(jObj);
+    if(jType == KEYS::Json().broadcast)
+        table_info_update(jObj);
 
-    if(jType == JSON_KEYS::ReqType().connect_fail)
-        fail_to_connect();
+    table_info_update(jObj);
 }
 
+void MainWindow::ini_parse(const QString &fname){
+    qDebug() << QDir::currentPath() + "/" + fname;
+    sett = new QSettings(QDir::currentPath() + "/" + fname, QSettings::IniFormat);
+    sett->beginGroup(KEYS::Config().settings);
+    m_port = static_cast<quint16>(sett->value(KEYS::Config().port, 9292).toUInt());
+    QString addres= sett->value(KEYS::Config().address, "localhost").toString();
+    if(!m_address.setAddress(addres) || addres == "localhost")
+        qDebug() << "ip addres incorrect";
+    sett->endGroup();
 
-void MainWindow::autorization(const QJsonObject &jObj){
+    sett->beginGroup(KEYS::Config().user_settings);
+    m_name = sett->value(KEYS::Config().name).toString();
+    sett->endGroup();
+}
+
+void MainWindow::autorization()
+{
     statusBar()->showMessage("Autorization successfully");
-    QJsonArray resNum = jObj[JSON_KEYS::Common().resnum].toArray();
-    QJsonArray resUsr = jObj[JSON_KEYS::Common().resuser].toArray();
-    QJsonArray busyTime = jObj[JSON_KEYS::Common().busy_time].toArray();
-    int hh, mm, ss;
-    QString res_time;
-    QJsonArray::const_iterator usrIdx = resUsr.begin();
-    QJsonArray::const_iterator timeIdx = busyTime.begin();
-    quint8 j;
-    for(auto i : resNum){
-
-        // FIXME почему то программа крашится если использовать умные указатели. А они нужны тут вобще?
-//        QSharedPointer<QWidget> checkBoxWidget = QSharedPointer<QWidget>(new QWidget());
-//        QSharedPointer<QCheckBox> checkBox = QSharedPointer<QCheckBox>(new QCheckBox());
-//        QSharedPointer<QHBoxLayout> layoutCheckBox = QSharedPointer<QHBoxLayout>(new QHBoxLayout(checkBoxWidget.data())); // слой с привязкой к виджету
-//        checkBox->setChecked(false);
-//        layoutCheckBox->addWidget(checkBox.data());
-//        layoutCheckBox->setAlignment(Qt::AlignCenter);
-//        layoutCheckBox->setContentsMargins(0, 0, 0, 0);
-//        ui->tableWidget_2->setCellWidget(i.toInt(), 3, checkBoxWidget.data());
-        j = static_cast<quint8>(i.toInt());
-        if(m_resList.contains(j) ){
-            res_time = timeIdx->toString();
-            hh = static_cast<int>(res_time.left(2).toInt());
-            mm = static_cast<int>(res_time.mid(3, 2).toInt());
-            ss = static_cast<int>(res_time.right(2).toInt());
-            m_resList[j]->currenUser = usrIdx->toString();
-            m_resList[j]->time->setHMS(hh, mm , ss);
-        }else{
-            res_time = timeIdx->toString();
-            hh = static_cast<int>(res_time.left(2).toInt());
-            mm = static_cast<int>(res_time.mid(3, 2).toInt());
-            ss = static_cast<int>(res_time.right(2).toInt());
-            m_resList.insert(j, new ResInf(usrIdx->toString(), hh, mm, ss) );
-        }
-        timeIdx++;
-        usrIdx++;
-    }
     timer->start();
-
-    int row = 0;
-    for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
-        // заполнение таблицы
-        if(row >= ui->tableWidget_2->rowCount()){
-            ui->tableWidget_2->insertRow(row);
-
-            ui->tableWidget_2->setItem(row, 0, new QTableWidgetItem( QString::number(i.key())) );
-            ui->tableWidget_2->setItem(row, 1, new QTableWidgetItem(i.value()->currenUser));
-            ui->tableWidget_2->setItem(row, 2, new QTableWidgetItem(i.value()->time->toString("hh:mm:ss")));
-
-            // настройка чекбокса
-            // FIXME надо удалять это говно в деструкторе?
-            QWidget *checkBoxWidget = new QWidget();
-            QCheckBox *checkBox = new QCheckBox();
-            QHBoxLayout *layoutCheckBox = new QHBoxLayout(checkBoxWidget); // слой с привязкой к виджету
-            layoutCheckBox->addWidget(checkBox);            // чекбокс в слой
-            layoutCheckBox->setAlignment(Qt::AlignCenter);  // Отцентровка чекбокса
-            layoutCheckBox->setContentsMargins(0,0,0,0);    // Устанавка нулевых отступов
-            checkBox->setChecked(false);
-            ui->tableWidget_2->setCellWidget(row, 3, checkBoxWidget);
-        }
-        row ++;
-    }
 }
 
+void MainWindow::table_info_update(const QJsonObject &jObj)
+{
+    QJsonArray resArr = jObj[KEYS::Json().resources].toArray();
+    QString user, res;
+    qint32 time;
+    for(auto i : resArr){
+        auto obj = i.toObject();
+        res = obj[KEYS::Json().res_name].toString();
+        user = obj[KEYS::Json().user_name].toString();
+        time = obj[KEYS::Json().time].toInt();
+        m_resList.insert(res, {user, QTime().addSecs(time)});
+    }
+    m_table_w->updateTableData(m_resList);
+}
 
 void MainWindow::res_intercept(const QJsonObject &jObj){
-    QJsonArray grabResNum = jObj[JSON_KEYS::Common().resource].toArray();
-    QString respocne = "Resource(s) num:";
-    for(auto i : grabResNum){
-        respocne += QString::number(i.toInt()) + ", ";
-    }
+    auto grabResNum = jObj[KEYS::Json().resources].toArray();
+
+    QString respocne = "Resources num:";
+    for(auto i : grabResNum)
+        respocne += i.toString() + ", ";
+
     respocne.remove(respocne.size()-2, 2);
     respocne += " were intercepted.";
     statusBar()->showMessage(respocne);
 }
 
+void MainWindow::req_responce(const QJsonObject &jObj)
+{
+    auto action = jObj[KEYS::Json().action].toString();
+    auto jArr = jObj[KEYS::Json().resources].toArray();
 
-void MainWindow::req_responce_take(const QJsonObject &jObj){
-    QJsonArray resReq = jObj[JSON_KEYS::Common().resource_responce].toArray();
-    QJsonArray resStatus = jObj[JSON_KEYS::Common().status].toArray();
-    QString respocne;
-    QString take, notTake;
-    for(auto i = 0; i < resReq.size(); i++){
-        if(resStatus[i].toInt() == 1){
-            take += QString::number(resReq[i].toInt()) + ", ";
-        }else{
-            notTake += QString::number(resReq[i].toInt()) + ", ";
-        }
+    QString res, responce = "", take = "", notTake = "";
+    bool answer;
+    for(auto i : jArr){
+        auto obj = i.toObject();
+        res = obj[KEYS::Json().res_name].toString();
+        answer = obj[KEYS::Json().status].toBool();
+
+        if(answer)
+            take += res + ", ";
+        else
+            notTake += res + ", ";
     }
+
     if(take.size() > 0){
         take.remove(take.size()-2, 2);
-        respocne += "Resources(s) num: " + take + " are busy successfully.";
+        responce += "Resourcs num: " + take + " are " + action  + " successfully.";
     }
     if(notTake.size() > 0){
         notTake.remove(notTake.size()-2, 2);
-        respocne += "Resources(s) num: " + notTake + " access denied.";
+        responce += "Resources num: " + notTake + " access denied.";
     }
-    statusBar()->showMessage(respocne);
+
+    statusBar()->showMessage(responce);
 }
 
-
-void MainWindow::req_responce_free(const QJsonObject &jObj){
-    QJsonArray resReq = jObj[JSON_KEYS::Common().resource_responce].toArray();
-    QJsonArray resStatus = jObj[JSON_KEYS::Common().status].toArray();
-    QString respocne;
-    QString free, notFree;
-    for(int i = 0; i < resReq.size(); i++){
-        if(resStatus[i].toInt() == 1){
-            free += QString::number(resReq[i].toInt()) + ", ";
-        }else{
-            notFree += QString::number(resReq[i].toInt()) + ", ";
-        }
-    }
-    if(free.size() > 0){
-        free.remove(free.size()-2, 2);
-        respocne += "Resources(s) num: " + free + " are free successfully.";
-    }
-    if(notFree.size() > 0){
-        notFree.remove(notFree.size()-2, 2);
-        respocne += "Resources(s) num: " + notFree + " access denied.";
-    }
-    statusBar()->showMessage(respocne);
-}
-
-
-void MainWindow::table_update(const QJsonObject &jObj){
-    QString usrTime;
-    QJsonArray resUsr = jObj[JSON_KEYS::Common().resuser].toArray();
-    QJsonArray busyTime = jObj[JSON_KEYS::Common().busy_time].toArray();
-    int hh, mm, ss;
-    for(quint8 i = 0; i <m_resList.size(); i++){
-        usrTime = busyTime[i].toString();
-        hh = static_cast<int>(usrTime.left(2).toInt());
-        mm = static_cast<int>(usrTime.mid(3, 2).toInt());
-        ss = static_cast<int>(usrTime.right(2).toInt());
-        m_resList[i]->currenUser = resUsr[i].toString();
-        m_resList[i]->time->setHMS(hh, mm, ss);
-    }
-    filling_table();
-}
-
-
-void MainWindow::fail_to_connect(){
-    statusBar()->showMessage("Authorization is not successful. Your IP in ban list");
-    ui->reconnect_btn->show();
-}
-
-
-void MainWindow::filling_table(){
-    int row = 0;
-    QString busyTime;
-    for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
-        // Обновление таблицы
-        ui->tableWidget_2->item(row, 0)->setData( Qt::DisplayRole, QString::number(i.key()) );
-        ui->tableWidget_2->item(row, 1)->setData(Qt::DisplayRole, i.value()->currenUser);
-        if(i.value()->currenUser != JSON_KEYS::State().free){
-            secsPassed = i.value()->time->secsTo(QTime::currentTime());
-            busyTime = QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60);            
-            ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, busyTime);
-        }else{
-            ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, "00:00:00");
-        }
-        row ++;
-    }
-}
-
-
-void MainWindow::on_takeRes_btn_clicked()
+void MainWindow::fail_to_connect()
 {
-    qint64 req = 0;  // если будет больше 4 ресурсов, то хрень полная
-    QCheckBox *checkBox = nullptr;
-    for(quint8 i=0; i<m_resList.size(); ++i){
-        checkBox = ui->tableWidget_2->cellWidget(i, 3)->findChild<QCheckBox*>();
-        if(checkBox && checkBox->isChecked()){
-            req = req | (1 << (i * 8));
-            checkBox->setChecked(false);
-        }
-    }
-    if(req){        
-        QTime time(0, 0, 0);
-        QJsonObject jObj;
-        jObj.insert(JSON_KEYS::Action().action, JSON_KEYS::Action().take);
-        jObj.insert(JSON_KEYS::Common().user_name, usrName);
-        jObj.insert(JSON_KEYS::Common().time, time.secsTo(QTime::currentTime())); // не верно
-        jObj.insert(JSON_KEYS::ReqType().res_request, req);
-        send_to_host(jObj);
-    }
-    checkBox = nullptr; //  FIXME: это надо делать чи нет?
+    statusBar()->showMessage("Authorization denied. Your IP is in the ban list");
+    ui->reconnectButton->show();
 }
-
-
-void MainWindow::on_clearRes_btn_clicked()
-{
-    qint64 req = 0;  // если будет больше 4 ресурсов, то хрень полная
-    QCheckBox *checkBox = nullptr;
-    for(quint8 i=0; i<m_resList.size(); i++){
-        checkBox = ui->tableWidget_2->cellWidget(i, 3)->findChild<QCheckBox*>();
-        if(checkBox && checkBox->isChecked()){
-            req = req | (1 << (i * 8));
-            checkBox->setChecked(false);
-        }
-    }
-    if(req){
-        QJsonObject jObj;
-        jObj.insert(JSON_KEYS::Action().action, JSON_KEYS::Action().leave);
-        jObj.insert(JSON_KEYS::Common().user_name, usrName);
-        jObj.insert(JSON_KEYS::ReqType().res_request, req);
-        send_to_host(jObj);
-    }
-    checkBox = nullptr;
-}
-
-
-void MainWindow::on_reconnect_btn_clicked()
-{
-    reconnect_sec = 0;
-    reconnectTimer->start();
-    ui->reconnect_btn->hide();
-}
-
 
 void MainWindow::timeout_recconect(){
     reconnect_sec++;
@@ -360,7 +240,7 @@ void MainWindow::timeout_recconect(){
             reconnect_sec = 0;
         }
     }else{
-        ui->reconnect_btn->show();
+        ui->reconnectButton->show();
         statusBar()->showMessage("Reconnect failing :(");
         reconnectTimer->stop();
     }
@@ -370,21 +250,17 @@ void MainWindow::timeout_recconect(){
 void MainWindow::time_update()
 {
     if(socket->state() == QTcpSocket::ConnectedState){
-        // время ресурсов
         QString busyTime;
-        int row = 0;
+        int secs;
         for(auto i = m_resList.begin(); i != m_resList.end(); ++i){
-            if(i.value()->currenUser != JSON_KEYS::State().free){
-                secsPassed = i.value()->time->secsTo(QTime::currentTime());
-                busyTime = QString::number(secsPassed/3600) + ":" + QString::number((secsPassed%3600)/60) + ":" + QString::number(secsPassed%60);
-                ui->tableWidget_2->item(row, 2)->setData(Qt::DisplayRole, busyTime);
+            if(i.value().first != KEYS::Common().no_user){
+                secs = i.value().second.secsTo(QTime::currentTime());
+                m_table_w->updateBusyTime(i.key(), secs);
             }
-            row ++;
         }
         timer->start();
     }else{
         statusBar()->showMessage("Сервер не доступен.");
-        ui->tableWidget_2->clearContents();
         timer->stop();
     }
 }
@@ -400,7 +276,44 @@ void MainWindow::send_to_host(const QJsonObject &jObj){
 }
 
 
+void MainWindow::on_takeButton_clicked()
+{
+    auto selected_list = m_table_w->getSelected();
 
+    if(selected_list.size() > 0){
+        QJsonArray jArr;
+        for(auto i: selected_list)
+            jArr << i;
 
+        QJsonObject jObj({{KEYS::Json().action, KEYS::Json().take},
+                          {KEYS::Json().user_name, m_name},
+                          {KEYS::Json().time, QTime::currentTime().second()},
+                          {KEYS::Json().resources, jArr}
+                         });
+        send_to_host(jObj);
+    }
+}
 
+void MainWindow::on_dropButton_clicked()
+{
+    auto selected_list = m_table_w->getSelected();
 
+    if(selected_list.size() > 0){
+        QJsonArray jArr;
+        for(auto i: selected_list)
+            jArr << i;
+
+        QJsonObject jObj({{KEYS::Json().action, KEYS::Json().drop},
+                          {KEYS::Json().user_name, m_name},
+                          {KEYS::Json().resources, jArr}
+                         });
+        send_to_host(jObj);
+    }
+}
+
+void MainWindow::on_reconnectButton_clicked()
+{
+    reconnect_sec = 0;
+    reconnectTimer->start();
+    ui->reconnectButton->hide();
+}

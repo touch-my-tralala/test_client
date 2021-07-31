@@ -18,14 +18,15 @@ public:
     QVariant      headerData(int section, Qt::Orientation orientation, int role) const override;
     Qt::ItemFlags flags(const QModelIndex& index) const override;
     bool          appendRes(const QString& resName);
+    void          removeAllRows();
     bool          setUser(const QString& resName, const QString& usrName);
     bool          setTime(const QString& resName, const QString& resTime);
 
 public slots:
-    QStringList removeSelected();
+    QStringList getSelected();
 
 private:
-    void setChecked(const QModelIndex& index, bool val);
+    void set_checked(const QModelIndex& index, bool val);
 
 private:
     enum Column
