@@ -4,12 +4,14 @@
 #include "json_keys/keys.h"
 #include <QMainWindow>
 #include <QTcpSocket>
-#include <QMessageBox>
+//#include <QMessageBox>
 #include <QtCore>
 #include <QInputDialog>
-#include <QHBoxLayout>
-#include <QCheckBox>
+//#include <QHBoxLayout>
+//#include <QCheckBox>
 #include <QHostAddress>
+#include <QSystemTrayIcon>
+#include <QCloseEvent>
 #include "table_model/mytablewidget.h"
 
 
@@ -27,6 +29,8 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+protected:
+    void closeEvent(QCloseEvent* event) override;
 
 private slots:
     void slotSockReady();
@@ -37,6 +41,7 @@ private slots:
     void on_takeButton_clicked();
     void on_dropButton_clicked();
     void on_reconnectButton_clicked();
+    void on_tray_icon_clicked(QSystemTrayIcon::ActivationReason reason);
 
 private:
     void ini_parse(const QString &fname);
@@ -53,6 +58,12 @@ private:
 
 private:
     quint16 m_port;
+
+    QSystemTrayIcon *m_tray_icon;
+    QMenu *menu;
+    QAction *view_window;
+    QAction *quit_app;
+
     QHostAddress m_address;
     QString m_name;
     QMap<QString, QPair<QString, QTime>> m_resList; //!< <имя ресурса, <пользователь, время использования>>

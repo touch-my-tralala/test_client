@@ -12,6 +12,23 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ini_parse("settings.ini");
 
+    m_tray_icon = new QSystemTrayIcon(this);
+    m_tray_icon->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
+    menu = new QMenu(this);
+    view_window = new QAction("Открыть", this);
+    quit_app = new QAction("Выход", this);
+
+    connect(view_window, &QAction::triggered, this, &MainWindow::show);
+    connect(quit_app, &QAction::triggered, this, &MainWindow::close);
+    menu->addAction(view_window);
+    menu->addAction(quit_app);
+
+    m_tray_icon->setContextMenu(menu);
+    m_tray_icon->show();
+
+    connect(m_tray_icon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(on_tray_icon_clicked(QSystemTrayIcon::ActivationReason)));
+
+
     ui->setupUi(this);
     ui->reconnectButton->hide();
 
@@ -54,6 +71,32 @@ MainWindow::~MainWindow()
     delete m_table_w;
     delete ui;
 }
+
+void MainWindow::closeEvent(QCloseEvent *event){
+
+    if(isVisible()){
+        event->ignore();
+        this->hide();
+        QSystemTrayIcon::MessageIcon icon = QSystemTrayIcon::MessageIcon(QSystemTrayIcon::Information);
+        m_tray_icon->showMessage("Tray Program", "Приложение свернуто в трей", icon, 2000);
+    }
+}
+void MainWindow::on_tray_icon_clicked(QSystemTrayIcon::ActivationReason reason){
+    switch (reason) {
+    case QSystemTrayIcon::Trigger:
+        if(!isVisible())
+            show();
+        else
+            hide();
+
+        break;
+
+    default:
+        break;
+    }
+}
+
+
 
 
 void MainWindow::slotConnected(){
