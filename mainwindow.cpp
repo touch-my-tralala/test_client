@@ -1,7 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-
 // 1) возможность сворачиваться в трей (высокий приоритет)
 // 3) в меню надо возможность сменить пользователя (заново ввести имя), или просто сбросится до первоначалных настроек.
 // 4) нормальная система авторизация (низкий приоритет)
@@ -12,22 +11,7 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ini_parse("settings.ini");
 
-    m_tray_icon = new QSystemTrayIcon(this);
-    m_tray_icon->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
-    menu = new QMenu(this);
-    view_window = new QAction("Открыть", this);
-    quit_app = new QAction("Выход", this);
-
-    connect(view_window, &QAction::triggered, this, &MainWindow::show);
-    connect(quit_app, &QAction::triggered, this, &MainWindow::close);
-    menu->addAction(view_window);
-    menu->addAction(quit_app);
-
-    m_tray_icon->setContextMenu(menu);
-    m_tray_icon->show();
-
-    connect(m_tray_icon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(on_tray_icon_clicked(QSystemTrayIcon::ActivationReason)));
-
+    init();
 
     ui->setupUi(this);
     ui->reconnectButton->hide();
@@ -35,24 +19,6 @@ MainWindow::MainWindow(QWidget *parent) :
     m_table_w = new MyTableWidget();
     ui->tableLayout->addWidget(m_table_w);
 
-    // Таймер времени переподключения
-    reconnectTimer = QSharedPointer<QTimer>(new QTimer);
-    reconnectTimer->setInterval(1000);
-    connect(reconnectTimer.data(), &QTimer::timeout, this, &MainWindow::timeout_recconect);
-    reconnectTimer->start();
-
-    // Таймер времени сервера/ресурсов
-    timer = QSharedPointer<QTimer>(new QTimer());
-    timer->setInterval(1000);
-    connect(timer.data(), &QTimer::timeout, this, &MainWindow::time_update);
-
-    socket = QSharedPointer<QTcpSocket>(new QTcpSocket(this));
-    connect(socket.data(), &QTcpSocket::readyRead, this, &MainWindow::slotSockReady);
-    connect(socket.data(), &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
-    connect(socket.data(), &QTcpSocket::connected, this, &MainWindow::slotConnected);
-
-    socket->connectToHost(m_address, m_port);
-    statusBar()->showMessage("Waiting for connection to host");
 }
 
 
@@ -72,36 +38,79 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+
+void MainWindow::init(){
+
+    build_interface();
+
+    // Таймер времени переподключения
+    reconnectTimer.setInterval(1000);
+    connect(&reconnectTimer, &QTimer::timeout, this, &MainWindow::timeout_recconect);
+    reconnectTimer.start();
+
+    // Таймер времени сервера/ресурсов
+    timer.setInterval(1000);
+    connect(&timer, &QTimer::timeout, this, &MainWindow::time_update);
+
+    // socket
+    socket = new QTcpSocket(this);
+    connect(socket, &QTcpSocket::readyRead, this, &MainWindow::slotSockReady);
+    connect(socket, &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
+    connect(socket, &QTcpSocket::connected, this, &MainWindow::slotConnected);
+
+    socket->connectToHost(m_address, m_port);
+    statusBar()->showMessage("Waiting for connection to host");
+}
+
+void MainWindow::build_interface(){
+    // init tray icon
+    m_tray_icon = new QSystemTrayIcon(this);
+    m_tray_icon->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
+    menu = new QMenu(this);
+    view_window = new QAction("Открыть", this);
+    quit_app = new QAction("Выход", this);
+
+    connect(view_window, &QAction::triggered, this, &MainWindow::show);
+    connect(quit_app, &QAction::triggered, this, &MainWindow::close);
+    connect(m_tray_icon, &QSystemTrayIcon::activated, this, &MainWindow::trayIconActivated);
+
+    menu->addAction(view_window);
+    menu->addAction(quit_app);
+    m_tray_icon->setContextMenu(menu);
+    m_tray_icon->show();
+}
+
 void MainWindow::closeEvent(QCloseEvent *event){
 
-    if(isVisible()){
+    if(isVisible() && ui->tray_en->isChecked()){
         event->ignore();
         this->hide();
-        QSystemTrayIcon::MessageIcon icon = QSystemTrayIcon::MessageIcon(QSystemTrayIcon::Information);
-        m_tray_icon->showMessage("Tray Program", "Приложение свернуто в трей", icon, 2000);
+        if(m_message_flag){
+            QSystemTrayIcon::MessageIcon icon = QSystemTrayIcon::MessageIcon(QSystemTrayIcon::Information);
+            m_tray_icon->showMessage("Tray Program", "Приложение свернуто в трей", icon, 2000);
+            m_message_flag = false;
+        }
     }
 }
-void MainWindow::on_tray_icon_clicked(QSystemTrayIcon::ActivationReason reason){
+
+void MainWindow::trayIconActivated(QSystemTrayIcon::ActivationReason reason){
     switch (reason) {
-    case QSystemTrayIcon::Trigger:
-        if(!isVisible())
-            show();
-        else
-            hide();
+        case QSystemTrayIcon::DoubleClick:
+            if(!isVisible())
+                this->show();
+            else
+                this->hide();
 
-        break;
+            break;
 
-    default:
-        break;
+        default:
+            break;
     }
 }
-
-
-
 
 void MainWindow::slotConnected(){
     statusBar()->showMessage("Сonnect to host successfully");
-    reconnectTimer->stop();
+    reconnectTimer.stop();
 
     // имя считано из конфига
     if(m_name.size() > 0){
@@ -154,12 +163,12 @@ void MainWindow::slotSockReady()
     buff.clear();
 }
 
-
-
-
-
 void MainWindow::slotSockDisconnected()
 {
+    if(ui->dropButton->isEnabled()){
+        ui->dropButton->setEnabled(false);
+        ui->takeButton->setEnabled(false);
+    }
     statusBar()->showMessage("Lost connection to host.");
     socket->close();
     ui->reconnectButton->show();
@@ -191,6 +200,7 @@ void MainWindow::json_handler(const QJsonObject &jObj)
 void MainWindow::ini_parse(const QString &fname){
     qDebug() << QDir::currentPath() + "/" + fname;
     sett = new QSettings(QDir::currentPath() + "/" + fname, QSettings::IniFormat);
+
     sett->beginGroup(KEYS::Config().settings);
     m_port = static_cast<quint16>(sett->value(KEYS::Config().port, 9292).toUInt());
     QString addres= sett->value(KEYS::Config().address, "localhost").toString();
@@ -206,7 +216,9 @@ void MainWindow::ini_parse(const QString &fname){
 void MainWindow::autorization()
 {
     statusBar()->showMessage("Autorization successfully");
-    timer->start();
+    ui->dropButton->setEnabled(true);
+    ui->takeButton->setEnabled(true);
+    timer.start();
 }
 
 void MainWindow::table_info_update(const QJsonObject &jObj)
@@ -276,16 +288,15 @@ void MainWindow::timeout_recconect(){
     reconnect_sec++;
     if(reconnect_sec <= 10){
         if(socket && socket->state() != QTcpSocket::ConnectedState){
-            socket->connectToHost("localhost", 9292);
             statusBar()->showMessage("Recconect time(max 10 sec): " + QString::number(reconnect_sec) + " s...");
-            reconnectTimer->start();
+            reconnectTimer.start();
         }else{
             reconnect_sec = 0;
         }
     }else{
         ui->reconnectButton->show();
         statusBar()->showMessage("Reconnect failing :(");
-        reconnectTimer->stop();
+        reconnectTimer.stop();
     }
 }
 
@@ -301,10 +312,10 @@ void MainWindow::time_update()
                 m_table_w->updateBusyTime(i.key(), secs);
             }
         }
-        timer->start();
+        timer.start();
     }else{
         statusBar()->showMessage("Сервер не доступен.");
-        timer->stop();
+        timer.stop();
     }
 }
 
@@ -357,6 +368,34 @@ void MainWindow::on_dropButton_clicked()
 void MainWindow::on_reconnectButton_clicked()
 {
     reconnect_sec = 0;
-    reconnectTimer->start();
+    socket->connectToHost(m_address, m_port);
+    reconnectTimer.start();
     ui->reconnectButton->hide();
+}
+
+void MainWindow::on_change_name_triggered()
+{
+    bool ok;
+    QString str = QInputDialog::getText(nullptr, "Input", "Имя:", QLineEdit::Normal,"Введите имя", &ok);
+    if(ok){
+        m_name = str.toLower();
+        statusBar()->showMessage("Authorization request");
+        QJsonObject jObj({{KEYS::Json().user_name, m_name}});
+        send_to_host(jObj);
+   }
+}
+
+void MainWindow::on_change_host_triggered()
+{
+    // FIXME: это же все удалиться само? включая динамически выделенную память внутри HostInputDialog?
+    QSharedPointer<HostInputDialog> h_dialog = QSharedPointer<HostInputDialog>(new HostInputDialog);
+    if(h_dialog->exec() == QDialog::Accepted){
+        m_address.setAddress( h_dialog->getAddress());
+        m_port = static_cast<quint16>(h_dialog->getPort().toInt());
+
+        if(socket->state() == QTcpSocket::ConnectedState)
+            socket->disconnectFromHost();
+
+        socket->connectToHost(m_address, m_port);
+    }
 }

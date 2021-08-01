@@ -43,6 +43,9 @@
         </item>
         <item>
          <widget class="QPushButton" name="takeButton">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="text">
            <string>Занять</string>
           </property>
@@ -50,6 +53,9 @@
         </item>
         <item>
          <widget class="QPushButton" name="dropButton">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="text">
            <string>Освободить</string>
           </property>
@@ -70,6 +76,15 @@
      <height>20</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuMenu">
+    <property name="title">
+     <string>Menu</string>
+    </property>
+    <addaction name="change_name"/>
+    <addaction name="change_host"/>
+    <addaction name="tray_en"/>
+   </widget>
+   <addaction name="menuMenu"/>
   </widget>
   <widget class="QToolBar" name="mainToolBar">
    <attribute name="toolBarArea">
@@ -80,6 +95,24 @@
    </attribute>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
+  <action name="change_name">
+   <property name="text">
+    <string>Сменить имя</string>
+   </property>
+  </action>
+  <action name="change_host">
+   <property name="text">
+    <string>Сменить адрес</string>
+   </property>
+  </action>
+  <action name="tray_en">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Сворачивать в трей</string>
+   </property>
+  </action>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
  <resources/>

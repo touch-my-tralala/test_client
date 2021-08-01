@@ -27,16 +27,20 @@ DEFINES += QT_DEPRECATED_WARNINGS
 CONFIG += c++11
 
 SOURCES += \
+        autoupdater/autoupdater.cpp \
         main.cpp \
         mainwindow.cpp \
         table_model/mytablewidget.cpp \
-        table_model/tablemodel.cpp
+        table_model/tablemodel.cpp \
+        widgets/hostinputdialog.cpp
 
 HEADERS += \
+        autoupdater/autoupdater.h \
         json_keys/keys.h \
         mainwindow.h \
         table_model/mytablewidget.h \
-        table_model/tablemodel.h
+        table_model/tablemodel.h \
+        widgets/hostinputdialog.h
 
 FORMS += \
         mainwindow.ui

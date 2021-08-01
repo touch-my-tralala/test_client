@@ -9,6 +9,7 @@ public:
         const QString settings        = "SETTINGS";
         const QString port            = "port";
         const QString address         = "address";
+        const QString tray_en         = "tray_enable"; // FIXME: почему-то вылетает приложение, если попытаться изначально поставить пункт меню tray_en в необходимое значение.
         const QString user_settings   = "USER_SETTINGS";
         const QString name            = "name";
     }CONFIG;
