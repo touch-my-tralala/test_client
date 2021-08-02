@@ -23,6 +23,11 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
+    enum JsonHeader{
+        Json_type  = 0,
+        File_type  = 1
+    };
+
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -59,6 +64,8 @@ private:
 
 private:
     quint16 m_port;
+    quint32 m_data_size = 0;
+    quint8 m_input_data_type;
 
     bool m_message_flag = true;
     QSystemTrayIcon *m_tray_icon;
@@ -66,8 +73,7 @@ private:
     QMenu *menu;
     QAction *view_window;
     QAction *quit_app;
-
-    QHostAddress m_address;
+    QString m_address;
     QString m_name;
     QMap<QString, QPair<QString, QTime>> m_resList; //!< <имя ресурса, <пользователь, время использования>>
     Ui::MainWindow *ui;
@@ -77,7 +83,7 @@ private:
     QTcpSocket* socket;
     QTimer timer;
     QTimer reconnectTimer;
-    QByteArray buff;
+    QByteArray m_buff;
     quint32 reconnect_sec = 0;
 };
 

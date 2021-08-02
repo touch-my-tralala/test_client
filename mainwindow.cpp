@@ -16,7 +16,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     ui->reconnectButton->hide();
 
-    m_table_w = new MyTableWidget();
+    m_table_w = new MyTableWidget(this);
     ui->tableLayout->addWidget(m_table_w);
 
 }
@@ -26,7 +26,7 @@ MainWindow::~MainWindow()
 {
     sett->beginGroup(KEYS::Config().settings);
     sett->setValue(KEYS::Config().port, m_port);
-    sett->setValue(KEYS::Config().address, m_address.toString());
+    sett->setValue(KEYS::Config().address, m_address);
     sett->endGroup();
 
     sett->beginGroup(KEYS::Config().user_settings);
@@ -134,33 +134,40 @@ void MainWindow::slotConnected(){
 
 void MainWindow::slotSockReady()
 {
+    QDataStream readStream(socket);
 
-    qint64 curByteNum = socket->bytesAvailable();
-    qDebug();
-    curByteNum = socket->bytesAvailable();
-    if(curByteNum <= READ_BLOCK_SIZE){
-        buff.append(socket->read(curByteNum));
-    }else{        
-        for(int i=0, e =curByteNum/READ_BLOCK_SIZE; i<= e; i++)
-            buff.append( socket->read(READ_BLOCK_SIZE));
+    if(!m_data_size){
+        qint32 header_size = sizeof(quint32) + sizeof(quint8);
+        if(socket->bytesAvailable() < header_size)
+            return;
+        readStream >> m_data_size;
+        readStream >> m_input_data_type;
     }
 
-    // переполнение буфера
-    if(buff.size()*sizeof(buff[0]) > 1000000){
-        qDebug() << "Buffer size > 1 Mb";
-        buff.clear();
+    if(m_input_data_type == File_type){
+        // Принятие файла. Запись без ожидания всех данных, например запись блоками в открытый файл, и по мере прихода дозаписывать.
         return;
     }
 
-    QJsonDocument jDoc = QJsonDocument::fromJson(buff, &jsonErr);
-    if(jsonErr.error == QJsonParseError::NoError){
-         json_handler(jDoc.object());
-    }else{
-         qDebug() << jsonErr.errorString();
-         buff.clear();
-         return;
+    if(m_input_data_type == Json_type){
+        if(socket->bytesAvailable() < m_data_size)
+            return;
+
+        quint8 byte;
+        for(quint32 i = 0; i < m_data_size; i++){
+            readStream >> byte;
+            m_buff.append(byte);
+        }
+
+        auto jDoc = QJsonDocument::fromJson(m_buff, &jsonErr);
+        if(jsonErr.error == QJsonParseError::NoError){
+            auto address = socket->peerAddress();
+            json_handler(jDoc.object());
+            m_buff.clear();
+            m_data_size = 0;
+        }else
+            qDebug() << "Ошибка json-формата" <<  jsonErr.errorString();
     }
-    buff.clear();
 }
 
 void MainWindow::slotSockDisconnected()
@@ -199,12 +206,13 @@ void MainWindow::json_handler(const QJsonObject &jObj)
 
 void MainWindow::ini_parse(const QString &fname){
     qDebug() << QDir::currentPath() + "/" + fname;
-    sett = new QSettings(QDir::currentPath() + "/" + fname, QSettings::IniFormat);
+    sett = new QSettings(QDir::currentPath() + "/" + fname, QSettings::IniFormat, this);
 
     sett->beginGroup(KEYS::Config().settings);
     m_port = static_cast<quint16>(sett->value(KEYS::Config().port, 9292).toUInt());
-    QString addres= sett->value(KEYS::Config().address, "localhost").toString();
-    if(!m_address.setAddress(addres) || addres == "localhost")
+    //m_address = sett->value(KEYS::Config().address, "localhost").toString();
+    m_address = "localhost";
+    if(m_address == "localhost")
         qDebug() << "ip addres incorrect";
     sett->endGroup();
 
@@ -321,9 +329,14 @@ void MainWindow::time_update()
 
 
 void MainWindow::send_to_host(const QJsonObject &jObj){
-    if(socket->state() == QTcpSocket::ConnectedState){
-        QJsonDocument jDoc(jObj);
-        socket->write(jDoc.toJson());
+    if(socket->state() == QTcpSocket::ConnectedState){        
+        QByteArray block;
+        QDataStream sendStream(&block, QIODevice::ReadWrite);
+        sendStream << quint32(0) << QJsonDocument(jObj).toJson(QJsonDocument::Compact);
+        // Размер данных
+        sendStream.device()->seek(0);
+        sendStream << (quint32)(block.size() - sizeof(quint32));
+        socket->write(block);
     }else{
         qDebug() << "Socket not connected";
     }
@@ -390,7 +403,7 @@ void MainWindow::on_change_host_triggered()
     // FIXME: это же все удалиться само? включая динамически выделенную память внутри HostInputDialog?
     QSharedPointer<HostInputDialog> h_dialog = QSharedPointer<HostInputDialog>(new HostInputDialog);
     if(h_dialog->exec() == QDialog::Accepted){
-        m_address.setAddress( h_dialog->getAddress());
+        m_address = h_dialog->getAddress();
         m_port = static_cast<quint16>(h_dialog->getPort().toInt());
 
         if(socket->state() == QTcpSocket::ConnectedState)
