@@ -57,6 +57,10 @@ void MainWindow::init()
     connect(socket, &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
     connect(socket, &QTcpSocket::connected, this, &MainWindow::slotConnected);
 
+    // Autoupdater
+    m_autoupdater.setUpdateFilePath();
+    // зарегистрировать файлы обнолвений
+
     socket->connectToHost(m_address, m_port);
     statusBar()->showMessage("Waiting for connection to host");
 }
@@ -144,6 +148,7 @@ void MainWindow::slotConnected()
 void MainWindow::slotSockReady()
 {
     QDataStream readStream(socket);
+    readStream.setVersion(QDataStream::Qt_4_8);
 
     if (!m_data_size)
     {
@@ -156,7 +161,7 @@ void MainWindow::slotSockReady()
 
     if (m_input_data_type == File_type)
     {
-        // Принятие файла. Запись без ожидания всех данных, например запись блоками в открытый файл, и по мере прихода дозаписывать.
+        // обработка файлового запроса
         return;
     }
 
@@ -365,6 +370,7 @@ void MainWindow::send_to_host(const QJsonObject& jObj)
     {
         QByteArray  block;
         QDataStream sendStream(&block, QIODevice::ReadWrite);
+        sendStream.setVersion(QDataStream::Qt_4_8);
         sendStream << quint32(block.size()) << QJsonDocument(jObj).toJson(QJsonDocument::Compact);
         socket->write(block);
     }

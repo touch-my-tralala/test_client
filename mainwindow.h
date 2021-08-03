@@ -11,6 +11,7 @@
 #include <QCloseEvent>
 #include "table_model/mytablewidget.h"
 #include "widgets/hostinputdialog.h"
+#include "autoupdater/autoupdater.h"
 
 
 namespace Ui {
@@ -69,6 +70,7 @@ private:
 
     bool m_message_flag = true;
     QSystemTrayIcon *m_tray_icon;
+    AutoUpdater m_autoupdater;
     // tray FIXME: что с этим говном? оно живет столько же сколько приложение, поэтому фиг с ней?
     QMenu *menu;
     QAction *view_window;
