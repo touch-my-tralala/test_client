@@ -2,7 +2,7 @@
 
 AutoUpdater::AutoUpdater()
 {
-    m_fileStream.setVersion(QDataStream::Qt_4_8);
+    m_fileStream.setVersion(QDataStream::Qt_5_12);
 }
 
 AutoUpdater::~AutoUpdater(){
@@ -113,16 +113,17 @@ int AutoUpdater::recvFile(QDataStream &readStream, const quint32 &size){
     return WaitData;
 }
 
-bool AutoUpdater::send_file_info(QTcpSocket &sock, const QString &fileName, const QByteArray &header){
+bool AutoUpdater::send_file_info(QTcpSocket &sock, const QString &fileName, const QByteArray &header)
+{
     if (sock.state() != QTcpSocket::ConnectedState)
         return false;
 
-    QByteArray  block;
-    QDataStream sendStream(&block, QIODevice::ReadWrite);
-    sendStream.setVersion(QDataStream::Qt_4_8);
+    QDataStream sendStream(&sock);
+    sendStream.setVersion(QDataStream::Qt_5_12);
 
-    sendStream << quint32(fileName.toUtf8().size()) << header << fileName.toUtf8();
-    sock.write(block);
+    auto block = fileName.toUtf8();
+    // информация о размере строки добавляется автоматически перед строкой 4 байта. Хз как выключить
+    sendStream << header << block;
 
     return true;
 }
@@ -135,20 +136,20 @@ bool AutoUpdater::send_file(QTcpSocket& sock, const QString& fileName, const QBy
     QFile file(m_update_file_path + "/" + fileName);
     if (file.open(QIODevice::ReadOnly))
     {
-        bool        firs_pack = true;
+        bool        first_pack = true;
         QByteArray  block;
         QDataStream fileStream(&file);
         char*       read_block = new char[BLOCK_DATA];
 
         QDataStream sendStream(&block, QIODevice::ReadWrite);
-        sendStream.setVersion(QDataStream::Qt_4_8);
+        sendStream.setVersion(QDataStream::Qt_5_12);
 
         while (fileStream.readRawData(read_block, BLOCK_DATA))
         {
-            if (firs_pack)
+            if (first_pack)
             {
-                sendStream << quint32(file.size()) << header << read_block;
-                firs_pack = false;
+                sendStream << header << quint32(file.size()) << read_block;
+                first_pack = false;
             }
             else
             {

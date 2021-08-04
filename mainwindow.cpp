@@ -33,7 +33,6 @@ MainWindow::~MainWindow()
     sett->endGroup();
 
     socket->close();
-    delete m_table_w;
     delete ui;
 }
 
@@ -58,7 +57,7 @@ void MainWindow::init()
     connect(socket, &QTcpSocket::connected, this, &MainWindow::slotConnected);
 
     // Autoupdater
-    m_autoupdater.setUpdateFilePath();
+    //m_autoupdater.setUpdateFilePath();
     // зарегистрировать файлы обнолвений
 
     socket->connectToHost(m_address, m_port);
@@ -148,45 +147,51 @@ void MainWindow::slotConnected()
 void MainWindow::slotSockReady()
 {
     QDataStream readStream(socket);
-    readStream.setVersion(QDataStream::Qt_4_8);
+    readStream.setVersion(QDataStream::Qt_5_12);
 
-    if (!m_data_size)
-    {
-        qint32 header_size = sizeof(quint32) + sizeof(quint8);
-        if (socket->bytesAvailable() < header_size)
-            return;
-        readStream >> m_data_size;
-        readStream >> m_input_data_type;
-    }
-
-    if (m_input_data_type == File_type)
-    {
-        // обработка файлового запроса
-        return;
-    }
-
-    if (m_input_data_type == Json_type)
-    {
-        if (socket->bytesAvailable() < m_data_size)
-            return;
-
-        quint8 byte;
-        for (quint32 i = 0; i < m_data_size; i++)
+    while(!readStream.atEnd()){
+        if (!m_data_size)
         {
-            readStream >> byte;
-            m_buff.append(byte);
+            qint32 header_size = sizeof(quint32) + sizeof(quint8);
+            if (socket->bytesAvailable() < header_size)
+                return;
+            readStream >> m_input_data_type;
+            readStream >> m_data_size;
         }
 
-        auto jDoc = QJsonDocument::fromJson(m_buff, &jsonErr);
-        if (jsonErr.error == QJsonParseError::NoError)
+        if (m_input_data_type == File_type)
         {
-            auto address = socket->peerAddress();
-            json_handler(jDoc.object());
+            // обработка файлового запроса
+            m_buff.clear();
+            m_data_size = 0;
+            return;
+        }
+
+        if (m_input_data_type == Json_type)
+        {
+            if (socket->bytesAvailable() < m_data_size)
+                return;
+
+            quint8 byte;
+            for (quint32 i = 0; i < m_data_size; i++)
+            {
+                readStream >> byte;
+                m_buff.append(byte);
+            }
+
+            auto jDoc = QJsonDocument::fromJson(m_buff, &jsonErr);
+            if (jsonErr.error == QJsonParseError::NoError)
+            {
+                auto address = socket->peerAddress();
+                json_handler(jDoc.object());
+
+            }
+            else
+                qDebug() << "Ошибка json-формата" << jsonErr.errorString();
+
             m_buff.clear();
             m_data_size = 0;
         }
-        else
-            qDebug() << "Ошибка json-формата" << jsonErr.errorString();
     }
 }
 
@@ -345,7 +350,6 @@ void MainWindow::time_update()
 {
     if (socket->state() == QTcpSocket::ConnectedState)
     {
-        QString busyTime;
         int     secs;
         for (auto i = m_resList.begin(); i != m_resList.end(); ++i)
         {
@@ -368,11 +372,9 @@ void MainWindow::send_to_host(const QJsonObject& jObj)
 {
     if (socket->state() == QTcpSocket::ConnectedState)
     {
-        QByteArray  block;
-        QDataStream sendStream(&block, QIODevice::ReadWrite);
-        sendStream.setVersion(QDataStream::Qt_4_8);
-        sendStream << quint32(block.size()) << QJsonDocument(jObj).toJson(QJsonDocument::Compact);
-        socket->write(block);
+        QDataStream sendStream(socket);
+        sendStream.setVersion(QDataStream::Qt_5_12);
+        sendStream  << QJsonDocument(jObj).toJson(QJsonDocument::Compact);
     }
     else
     {
@@ -390,9 +392,11 @@ void MainWindow::on_takeButton_clicked()
         for (auto i : selected_list)
             jArr << i;
 
+        qint32 curTime =  QTime(0,0,0).secsTo(QTime::currentTime());
+
         QJsonObject jObj({ { KEYS::Json().action, KEYS::Json().take },
                            { KEYS::Json().user_name, m_name },
-                           { KEYS::Json().time, QTime::currentTime().second() },
+                           { KEYS::Json().time, curTime },
                            { KEYS::Json().resources, jArr } });
         send_to_host(jObj);
     }

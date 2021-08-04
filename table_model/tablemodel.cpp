@@ -143,11 +143,11 @@ bool TableModel::setTime(const QString& resName, const QString& resTime)
 
 QStringList TableModel::getSelected()
 {
-    QStringList rmvUsers;
+    QStringList selectedList;
     for (auto i = m_table_row.begin(); i != m_table_row.end(); i++)
     {
         if (i->value(SELECTED, false).toBool())
-            rmvUsers << i->value(NAME).toString();
+            selectedList << i->value(NAME).toString();
     }
-    return rmvUsers;
+    return selectedList;
 }
