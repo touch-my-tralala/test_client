@@ -80,7 +80,7 @@ void MainWindow::build_interface()
     menu->addAction(view_window);
     menu->addAction(quit_app);
     m_tray_icon->setContextMenu(menu);
-    m_tray_icon->show();
+
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -90,6 +90,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
     {
         event->ignore();
         this->hide();
+        m_tray_icon->show();
         if (m_message_flag)
         {
             QSystemTrayIcon::MessageIcon icon = QSystemTrayIcon::MessageIcon(QSystemTrayIcon::Information);
@@ -104,11 +105,13 @@ void MainWindow::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
     switch (reason)
     {
         case QSystemTrayIcon::DoubleClick:
-            if (!isVisible())
+            if (!isVisible()){
                 this->show();
-            else
+                m_tray_icon->hide();
+            }else{
                 this->hide();
-
+                m_tray_icon->show();
+            }
             break;
 
         default:
@@ -442,7 +445,6 @@ void MainWindow::on_change_name_triggered()
 
 void MainWindow::on_change_host_triggered()
 {
-    // FIXME: это же все удалиться само? включая динамически выделенную память внутри HostInputDialog?
     QSharedPointer<HostInputDialog> h_dialog = QSharedPointer<HostInputDialog>(new HostInputDialog);
     if (h_dialog->exec() == QDialog::Accepted)
     {

@@ -6,11 +6,11 @@ HostInputDialog::HostInputDialog(QWidget* parrent)
         m_port = new QLineEdit(this);
         m_address  = new QLineEdit(this);
 
-        QLabel* plblFirstName    = new QLabel("&First Name", this);
-        QLabel* plblLastName     = new QLabel("&Last Name", this);
+        QLabel* plblPort    = new QLabel("&Port", this);
+        QLabel* plblAddress     = new QLabel("&Address", this);
 
-        plblFirstName->setBuddy(m_port);
-        plblLastName->setBuddy(m_address);
+        plblPort->setBuddy(m_port);
+        plblAddress->setBuddy(m_address);
 
         QPushButton* pcmdOk     = new QPushButton("&Ok", this);
         QPushButton* pcmdCancel = new QPushButton("&Cancel", this);
@@ -20,8 +20,8 @@ HostInputDialog::HostInputDialog(QWidget* parrent)
 
         //Layout setup
         QGridLayout* ptopLayout = new QGridLayout(this);
-        ptopLayout->addWidget(plblFirstName, 0, 0);
-        ptopLayout->addWidget(plblLastName, 1, 0);
+        ptopLayout->addWidget(plblPort, 0, 0);
+        ptopLayout->addWidget(plblAddress, 1, 0);
         ptopLayout->addWidget(m_port, 0, 1);
         ptopLayout->addWidget(m_address, 1, 1);
         ptopLayout->addWidget(pcmdOk, 2,0);
