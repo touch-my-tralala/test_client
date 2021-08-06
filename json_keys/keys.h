@@ -8,12 +8,15 @@ class KEYS
 public:
     static const struct Config
     {
+        const QString file_name     = "settings.ini";
         const QString settings      = "SETTINGS";
+        const QString user_settings = "USER_SETTINGS";
+        const QString updates       = "UPDATES";
         const QString port          = "port";
         const QString address       = "address";
         const QString tray_en       = "tray_enable"; // FIXME: почему-то вылетает приложение, если попытаться изначально поставить пункт меню tray_en в необходимое значение.
-        const QString user_settings = "USER_SETTINGS";
         const QString name          = "name";
+        const QString update_path   = "update_path";
     } CONFIG;
 
     static const struct Json

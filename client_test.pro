@@ -28,6 +28,7 @@ CONFIG += c++11
 
 SOURCES += \
         autoupdater/autoupdater.cpp \
+        context_config/contextconfiguration.cpp \
         main.cpp \
         mainwindow.cpp \
         table_model/mytablewidget.cpp \
@@ -37,6 +38,7 @@ SOURCES += \
 
 HEADERS += \
         autoupdater/autoupdater.h \
+        context_config/contextconfiguration.h \
         json_keys/keys.h \
         mainwindow.h \
         table_model/mytablewidget.h \

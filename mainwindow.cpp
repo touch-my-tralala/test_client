@@ -10,8 +10,6 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
-    ini_parse("settings.ini");
-
     init();
 
     ui->setupUi(this);
@@ -23,15 +21,8 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
-    sett->beginGroup(KEYS::Config().settings);
-    sett->setValue(KEYS::Config().port, m_port);
-    sett->setValue(KEYS::Config().address, m_address);
-    sett->endGroup();
-
-    sett->beginGroup(KEYS::Config().user_settings);
-    sett->setValue(KEYS::Config().name, m_name);
-    sett->endGroup();
-
+    m_user_config.writeConfiguration();
+    m_common_config.writeConfiguration();
     socket->close();
     delete ui;
 }
@@ -40,6 +31,14 @@ void MainWindow::init()
 {
 
     build_interface();
+    QSettings* sett = new QSettings(QDir::currentPath() + "/" + KEYS::Config().file_name);
+    m_user_config.loadConfiguration(sett);
+    m_common_config.loadConfiguration(sett);
+
+    m_port = static_cast<quint16>(m_common_config.getConfigParam(KEYS::Config().port).toUInt());
+    m_address = m_common_config.getConfigParam(KEYS::Config().address).toString();
+
+    m_name = m_user_config.getConfigParam(KEYS::Config().name).toString();
 
     // Таймер времени переподключения
     reconnectTimer.setInterval(1000);
@@ -60,6 +59,8 @@ void MainWindow::init()
     //m_autoupdater.setUpdateFilePath();
     // зарегистрировать файлы обнолвений
 
+    m_goose.setPixmap(QPixmap("goose.png"));
+
     socket->connectToHost(m_address, m_port);
     statusBar()->showMessage("Waiting for connection to host");
 }
@@ -69,9 +70,10 @@ void MainWindow::build_interface()
     // init tray icon
     m_tray_icon = new QSystemTrayIcon(this);
     m_tray_icon->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
-    menu        = new QMenu(this);
-    view_window = new QAction("Открыть", this);
-    quit_app    = new QAction("Выход", this);
+    // FIXME: так можно оставить?
+    QMenu* menu        = new QMenu(this);
+    QAction* view_window = new QAction("Открыть", this);
+    QAction* quit_app    = new QAction("Выход", this);
 
     connect(view_window, &QAction::triggered, this, &MainWindow::show);
     connect(quit_app, &QAction::triggered, this, &MainWindow::close);
@@ -219,8 +221,10 @@ void MainWindow::json_handler(const QJsonObject& jObj)
     if (jType == KEYS::Json().connect_fail)
         fail_to_connect();
 
-    if (jType == KEYS::Json().goose)
-        show_goose();
+    if (jType == KEYS::Json().goose){
+        m_goose.show();
+        QTimer::singleShot(1000, this, &MainWindow::show_goose);
+    }
 
     if (jType == KEYS::Json().authorization)
         autorization();
@@ -235,24 +239,6 @@ void MainWindow::json_handler(const QJsonObject& jObj)
         table_info_update(jObj);
 
     table_info_update(jObj);
-}
-
-void MainWindow::ini_parse(const QString& fname)
-{
-    qDebug() << QDir::currentPath() + "/" + fname;
-    sett = new QSettings(QDir::currentPath() + "/" + fname, QSettings::IniFormat, this);
-
-    sett->beginGroup(KEYS::Config().settings);
-    m_port = static_cast<quint16>(sett->value(KEYS::Config().port, 9292).toUInt());
-    //m_address = sett->value(KEYS::Config().address, "localhost").toString();
-    m_address = "localhost";
-    if (m_address == "localhost")
-        qDebug() << "ip addres incorrect";
-    sett->endGroup();
-
-    sett->beginGroup(KEYS::Config().user_settings);
-    m_name = sett->value(KEYS::Config().name).toString();
-    sett->endGroup();
 }
 
 void MainWindow::autorization()
@@ -465,14 +451,7 @@ void MainWindow::on_change_host_triggered()
 
 void MainWindow::show_goose()
 {
-    QSharedPointer<QLabel> goose_label = QSharedPointer<QLabel>(new QLabel);
-    QPicture               goose_pic;
-    auto                   a = goose_pic.load("D:/EvstigneevD/qt_Prj/test_client/build/goose.png"); // Почему-то не открывается
-    if (a)
-    {
-        goose_label->setPicture(goose_pic);
-        goose_label->showFullScreen();
-    }
+    m_goose.hide();
 }
 
 void MainWindow::on_send_goose_triggered()
