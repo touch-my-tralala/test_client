@@ -100,7 +100,7 @@ bool TableModel::appendRes(const QString& resName)
     resurs[NAME] = resName;
     resurs[USER] = "free";
     resurs[TIME] = "00:00:00";
-    auto row         = m_table_row.count();
+    auto row     = m_table_row.count();
     beginInsertRows(QModelIndex(), row, row);
     m_table_row.append(resurs);
     endInsertRows();
@@ -109,11 +109,13 @@ bool TableModel::appendRes(const QString& resName)
 
 void TableModel::removeAllRows()
 {
-    beginRemoveRows(QModelIndex(), 0, m_table_row.size()-1);
-    m_table_row.clear();
-    endRemoveRows();
+    if (m_table_row.size() > 0)
+    {
+        beginRemoveRows(QModelIndex(), 0, m_table_row.size() - 1);
+        m_table_row.clear();
+        endRemoveRows();
+    }
 }
-
 
 bool TableModel::setUser(const QString& resName, const QString& usrName)
 {
