@@ -32,7 +32,8 @@ SOURCES += \
         mainwindow.cpp \
         table_model/mytablewidget.cpp \
         table_model/tablemodel.cpp \
-        widgets/hostinputdialog.cpp
+        widgets/hostinputdialog.cpp \
+        widgets/sendgoosewidget.cpp
 
 HEADERS += \
         autoupdater/autoupdater.h \
@@ -40,7 +41,8 @@ HEADERS += \
         mainwindow.h \
         table_model/mytablewidget.h \
         table_model/tablemodel.h \
-        widgets/hostinputdialog.h
+        widgets/hostinputdialog.h \
+        widgets/sendgoosewidget.h
 
 FORMS += \
         mainwindow.ui

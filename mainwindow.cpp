@@ -80,7 +80,6 @@ void MainWindow::build_interface()
     menu->addAction(view_window);
     menu->addAction(quit_app);
     m_tray_icon->setContextMenu(menu);
-
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -105,10 +104,13 @@ void MainWindow::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
     switch (reason)
     {
         case QSystemTrayIcon::DoubleClick:
-            if (!isVisible()){
+            if (!isVisible())
+            {
                 this->show();
                 m_tray_icon->hide();
-            }else{
+            }
+            else
+            {
                 this->hide();
                 m_tray_icon->show();
             }
@@ -152,7 +154,8 @@ void MainWindow::slotSockReady()
     QDataStream readStream(socket);
     readStream.setVersion(QDataStream::Qt_5_12);
 
-    while(!readStream.atEnd()){
+    while (!readStream.atEnd())
+    {
         if (!m_data_size)
         {
             qint32 header_size = sizeof(quint32) + sizeof(quint8);
@@ -187,7 +190,6 @@ void MainWindow::slotSockReady()
             {
                 auto address = socket->peerAddress();
                 json_handler(jDoc.object());
-
             }
             else
                 qDebug() << "Ошибка json-формата" << jsonErr.errorString();
@@ -216,6 +218,9 @@ void MainWindow::json_handler(const QJsonObject& jObj)
 
     if (jType == KEYS::Json().connect_fail)
         fail_to_connect();
+
+    if (jType == KEYS::Json().goose)
+        show_goose();
 
     if (jType == KEYS::Json().authorization)
         autorization();
@@ -353,7 +358,7 @@ void MainWindow::time_update()
 {
     if (socket->state() == QTcpSocket::ConnectedState)
     {
-        int     secs;
+        int secs;
         for (auto i = m_resList.begin(); i != m_resList.end(); ++i)
         {
             if (i.value().first != KEYS::Common().no_user)
@@ -377,7 +382,7 @@ void MainWindow::send_to_host(const QJsonObject& jObj)
     {
         QDataStream sendStream(socket);
         sendStream.setVersion(QDataStream::Qt_5_12);
-        sendStream  << QJsonDocument(jObj).toJson(QJsonDocument::Compact);
+        sendStream << QJsonDocument(jObj).toJson(QJsonDocument::Compact);
     }
     else
     {
@@ -395,7 +400,7 @@ void MainWindow::on_takeButton_clicked()
         for (auto i : selected_list)
             jArr << i;
 
-        qint32 curTime =  QTime(0,0,0).secsTo(QTime::currentTime());
+        qint32 curTime = QTime(0, 0, 0).secsTo(QTime::currentTime());
 
         QJsonObject jObj({ { KEYS::Json().action, KEYS::Json().take },
                            { KEYS::Json().user_name, m_name },
@@ -412,7 +417,7 @@ void MainWindow::on_dropButton_clicked()
     if (selected_list.size() > 0)
     {
         QJsonArray jArr;
-        for (auto i : selected_list)
+        for (const auto& i : qAsConst(selected_list))
             jArr << i;
 
         QJsonObject jObj({ { KEYS::Json().action, KEYS::Json().drop },
@@ -455,5 +460,27 @@ void MainWindow::on_change_host_triggered()
             socket->disconnectFromHost();
 
         socket->connectToHost(m_address, m_port);
+    }
+}
+
+void MainWindow::show_goose()
+{
+    QSharedPointer<QLabel> goose_label = QSharedPointer<QLabel>(new QLabel);
+    QPicture               goose_pic;
+    auto                   a = goose_pic.load("D:/EvstigneevD/qt_Prj/test_client/build/goose.png"); // Почему-то не открывается
+    if (a)
+    {
+        goose_label->setPicture(goose_pic);
+        goose_label->showFullScreen();
+    }
+}
+
+void MainWindow::on_send_goose_triggered()
+{
+    QSharedPointer<SendGooseWidget> goose_widget = QSharedPointer<SendGooseWidget>(new SendGooseWidget);
+    if (goose_widget->exec() == QDialog::Accepted)
+    {
+        auto obj = goose_widget->getSendObj();
+        send_to_host(obj);
     }
 }

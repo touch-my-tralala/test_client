@@ -1,21 +1,24 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include "json_keys/keys.h"
+#include <QCloseEvent>
+#include <QHostAddress>
+#include <QInputDialog>
 #include <QMainWindow>
+#include <QPicture>
+#include <QSystemTrayIcon>
 #include <QTcpSocket>
 #include <QtCore>
-#include <QInputDialog>
-#include <QHostAddress>
-#include <QSystemTrayIcon>
-#include <QCloseEvent>
+
+#include "autoupdater/autoupdater.h"
+#include "json_keys/keys.h"
 #include "table_model/mytablewidget.h"
 #include "widgets/hostinputdialog.h"
-#include "autoupdater/autoupdater.h"
+#include "widgets/sendgoosewidget.h"
 
-
-namespace Ui {
-class MainWindow;
+namespace Ui
+{
+    class MainWindow;
 
 #define READ_BLOCK_SIZE 32768
 }
@@ -24,13 +27,14 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
-    enum JsonHeader{
-        Json_type  = 0,
-        File_type  = 1
+    enum JsonHeader
+    {
+        Json_type = 0,
+        File_type = 1
     };
 
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
 protected:
@@ -49,44 +53,46 @@ private slots:
     void on_change_name_triggered();
     void on_change_host_triggered();
 
+    void on_send_goose_triggered();
+
 private:
-    void ini_parse(const QString &fname);
+    void ini_parse(const QString& fname);
     void init();
     void build_interface();
-    void json_handler(const QJsonObject &jObj);
+    void json_handler(const QJsonObject& jObj);
     void autorization();
-    void res_intercept(const QJsonObject &jObj);
-    void req_responce(const QJsonObject &jObj);
-    void table_info_update(const QJsonObject &jObj);
+    void res_intercept(const QJsonObject& jObj);
+    void req_responce(const QJsonObject& jObj);
+    void table_info_update(const QJsonObject& jObj);
     void fail_to_connect();
     void filling_table();
-    void send_to_host(const QJsonObject &jObj);
-
+    void send_to_host(const QJsonObject& jObj);
+    void show_goose();
 
 private:
     quint16 m_port;
     quint32 m_data_size = 0;
-    quint8 m_input_data_type;
+    quint8  m_input_data_type;
 
-    bool m_message_flag = true;
-    QSystemTrayIcon *m_tray_icon;
-    AutoUpdater m_autoupdater;
+    bool             m_message_flag = true;
+    QSystemTrayIcon* m_tray_icon;
+    AutoUpdater      m_autoupdater;
     // tray FIXME: что с этим говном? оно живет столько же сколько приложение, поэтому фиг с ней?
-    QMenu *menu;
-    QAction *view_window;
-    QAction *quit_app;
-    QString m_address;
-    QString m_name;
+    QMenu*                               menu;
+    QAction*                             view_window;
+    QAction*                             quit_app;
+    QString                              m_address;
+    QString                              m_name;
     QMap<QString, QPair<QString, QTime>> m_resList; //!< <имя ресурса, <пользователь, время использования>>
-    Ui::MainWindow *ui;
-    MyTableWidget *m_table_w = nullptr;
-    QSettings* sett;
-    QJsonParseError jsonErr;
-    QTcpSocket* socket;
-    QTimer timer;
-    QTimer reconnectTimer;
-    QByteArray m_buff;
-    quint32 reconnect_sec = 0;
+    Ui::MainWindow*                      ui;
+    MyTableWidget*                       m_table_w = nullptr;
+    QSettings*                           sett;
+    QJsonParseError                      jsonErr;
+    QTcpSocket*                          socket;
+    QTimer                               timer;
+    QTimer                               reconnectTimer;
+    QByteArray                           m_buff;
+    quint32                              reconnect_sec = 0;
 };
 
 #endif // MAINWINDOW_H

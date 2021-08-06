@@ -80,9 +80,16 @@
     <property name="title">
      <string>Menu</string>
     </property>
+    <widget class="QMenu" name="menu">
+     <property name="title">
+      <string>Служебные</string>
+     </property>
+     <addaction name="send_goose"/>
+    </widget>
     <addaction name="change_name"/>
     <addaction name="change_host"/>
     <addaction name="tray_en"/>
+    <addaction name="menu"/>
    </widget>
    <addaction name="menuMenu"/>
   </widget>
@@ -111,6 +118,11 @@
    </property>
    <property name="text">
     <string>Сворачивать в трей</string>
+   </property>
+  </action>
+  <action name="send_goose">
+   <property name="text">
+    <string>Отправить гуся</string>
    </property>
   </action>
  </widget>
