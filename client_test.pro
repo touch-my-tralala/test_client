@@ -27,7 +27,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 CONFIG += c++11
 
 SOURCES += \
-        autoupdater/autoupdater.cpp \
+        autoupdater/restautoupdater.cpp \
         context_config/contextconfiguration.cpp \
         main.cpp \
         mainwindow.cpp \
@@ -37,7 +37,7 @@ SOURCES += \
         widgets/sendgoosewidget.cpp
 
 HEADERS += \
-        autoupdater/autoupdater.h \
+        autoupdater/restautoupdater.h \
         context_config/contextconfiguration.h \
         json_keys/keys.h \
         mainwindow.h \

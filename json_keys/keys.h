@@ -16,8 +16,16 @@ public:
         const QString address       = "address";
         const QString tray_en       = "tray_enable"; // FIXME: почему-то вылетает приложение, если попытаться изначально поставить пункт меню tray_en в необходимое значение.
         const QString name          = "name";
-        const QString update_path   = "update_path";
+
     } CONFIG;
+
+    static const struct Updater
+    {
+        const QString update_path      = "update_path";
+        const QString update_file_info = "update_info";
+        const QString file_name        = "file_name";
+        const QString file_version     = "version";
+    }UPDATER;
 
     static const struct Json
     {

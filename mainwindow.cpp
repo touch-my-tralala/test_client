@@ -2,8 +2,6 @@
 
 #include "ui_mainwindow.h"
 
-// 1) возможность сворачиваться в трей (высокий приоритет)
-// 3) в меню надо возможность сменить пользователя (заново ввести имя), или просто сбросится до первоначалных настроек.
 // 4) нормальная система авторизация (низкий приоритет)
 
 MainWindow::MainWindow(QWidget* parent)
@@ -29,8 +27,8 @@ MainWindow::~MainWindow()
 
 void MainWindow::init()
 {
-
     build_interface();
+
     QSettings* sett = new QSettings(QDir::currentPath() + "/" + KEYS::Config().file_name);
     m_user_config.loadConfiguration(sett);
     m_common_config.loadConfiguration(sett);
@@ -40,10 +38,13 @@ void MainWindow::init()
 
     m_name = m_user_config.getConfigParam(KEYS::Config().name).toString();
 
+    // Настройка автоапдейтера
+    m_autoupdater.setRepo("touch-my-tralala/pcma_detector");
+    m_autoupdater.setSavePath(QDir::currentPath() + "/updates");
+    //m_autoupdater.loadUpdates();
+
     // Таймер времени переподключения
-    reconnectTimer.setInterval(1000);
-    connect(&reconnectTimer, &QTimer::timeout, this, &MainWindow::timeout_recconect);
-    reconnectTimer.start();
+    QTimer::singleShot(1000, this, &MainWindow::timeout_recconect);
 
     // Таймер времени сервера/ресурсов
     timer.setInterval(1000);
@@ -54,10 +55,6 @@ void MainWindow::init()
     connect(socket, &QTcpSocket::readyRead, this, &MainWindow::slotSockReady);
     connect(socket, &QTcpSocket::disconnected, this, &MainWindow::slotSockDisconnected);
     connect(socket, &QTcpSocket::connected, this, &MainWindow::slotConnected);
-
-    // Autoupdater
-    //m_autoupdater.setUpdateFilePath();
-    // зарегистрировать файлы обнолвений
 
     m_goose.setPixmap(QPixmap("goose.png"));
 
@@ -126,7 +123,6 @@ void MainWindow::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
 void MainWindow::slotConnected()
 {
     statusBar()->showMessage("Сonnect to host successfully");
-    reconnectTimer.stop();
 
     // имя считано из конфига
     if (m_name.size() > 0)
@@ -163,42 +159,30 @@ void MainWindow::slotSockReady()
             qint32 header_size = sizeof(quint32) + sizeof(quint8);
             if (socket->bytesAvailable() < header_size)
                 return;
-            readStream >> m_input_data_type;
             readStream >> m_data_size;
         }
 
-        if (m_input_data_type == File_type)
-        {
-            // обработка файлового запроса
-            m_buff.clear();
-            m_data_size = 0;
+
+        if (socket->bytesAvailable() < m_data_size)
             return;
-        }
 
-        if (m_input_data_type == Json_type)
+        m_data_size = 0;
+
+        quint8 byte;
+        for (quint32 i = 0; i < m_data_size; i++)
         {
-            if (socket->bytesAvailable() < m_data_size)
-                return;
-
-            quint8 byte;
-            for (quint32 i = 0; i < m_data_size; i++)
-            {
-                readStream >> byte;
-                m_buff.append(byte);
-            }
-
-            auto jDoc = QJsonDocument::fromJson(m_buff, &jsonErr);
-            if (jsonErr.error == QJsonParseError::NoError)
-            {
-                auto address = socket->peerAddress();
-                json_handler(jDoc.object());
-            }
-            else
-                qDebug() << "Ошибка json-формата" << jsonErr.errorString();
-
-            m_buff.clear();
-            m_data_size = 0;
+            readStream >> byte;
+            m_buff.append(byte);
         }
+
+        auto jDoc = QJsonDocument::fromJson(m_buff, &jsonErr);
+        if (jsonErr.error == QJsonParseError::NoError)
+            json_handler(jDoc.object());
+        else
+            qDebug() << "Ошибка json-формата" << jsonErr.errorString();
+
+        m_buff.clear();
+
     }
 }
 
@@ -254,7 +238,7 @@ void MainWindow::table_info_update(const QJsonObject& jObj)
     QJsonArray resArr = jObj[KEYS::Json().resources].toArray();
     QString    user, res;
     qint32     time;
-    for (auto i : resArr)
+    for (const auto &i : qAsConst(resArr))
     {
         auto obj = i.toObject();
         res      = obj[KEYS::Json().res_name].toString();
@@ -270,7 +254,7 @@ void MainWindow::res_intercept(const QJsonObject& jObj)
     auto grabResNum = jObj[KEYS::Json().resources].toArray();
 
     QString respocne = "Resources num:";
-    for (auto i : grabResNum)
+    for (const auto &i : qAsConst(grabResNum))
         respocne += i.toString() + ", ";
 
     respocne.remove(respocne.size() - 2, 2);
@@ -285,7 +269,7 @@ void MainWindow::req_responce(const QJsonObject& jObj)
 
     QString res, responce = "", take = "", notTake = "";
     bool    answer;
-    for (auto i : jArr)
+    for (const auto &i : qAsConst(jArr))
     {
         auto obj = i.toObject();
         res      = obj[KEYS::Json().res_name].toString();
@@ -325,7 +309,7 @@ void MainWindow::timeout_recconect()
         if (socket && socket->state() != QTcpSocket::ConnectedState)
         {
             statusBar()->showMessage("Recconect time(max 10 sec): " + QString::number(reconnect_sec) + " s...");
-            reconnectTimer.start();
+            QTimer::singleShot(1000, this, &MainWindow::timeout_recconect);
         }
         else
         {
@@ -336,7 +320,6 @@ void MainWindow::timeout_recconect()
     {
         ui->reconnectButton->show();
         statusBar()->showMessage("Reconnect failing :(");
-        reconnectTimer.stop();
     }
 }
 
@@ -383,7 +366,7 @@ void MainWindow::on_takeButton_clicked()
     if (selected_list.size() > 0)
     {
         QJsonArray jArr;
-        for (auto i : selected_list)
+        for (const auto &i : qAsConst(selected_list))
             jArr << i;
 
         qint32 curTime = QTime(0, 0, 0).secsTo(QTime::currentTime());
@@ -417,7 +400,7 @@ void MainWindow::on_reconnectButton_clicked()
 {
     reconnect_sec = 0;
     socket->connectToHost(m_address, m_port);
-    reconnectTimer.start();
+    QTimer::singleShot(1000, this, &MainWindow::timeout_recconect);
     ui->reconnectButton->hide();
 }
 

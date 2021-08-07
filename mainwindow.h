@@ -10,12 +10,12 @@
 #include <QTcpSocket>
 #include <QtCore>
 
-#include "autoupdater/autoupdater.h"
 #include "json_keys/keys.h"
 #include "table_model/mytablewidget.h"
 #include "widgets/hostinputdialog.h"
 #include "widgets/sendgoosewidget.h"
 #include "context_config/contextconfiguration.h"
+#include "autoupdater/restautoupdater.h"
 
 namespace Ui
 {
@@ -27,12 +27,6 @@ namespace Ui
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
-
-    enum JsonHeader
-    {
-        Json_type = 0,
-        File_type = 1
-    };
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
@@ -69,14 +63,12 @@ private:
     void show_goose();
 
 private:
-    quint16 m_port;
-    quint32 m_data_size = 0;
-    quint8  m_input_data_type;
-    bool             m_message_flag = true;
-    QSystemTrayIcon* m_tray_icon;
-    AutoUpdater      m_autoupdater;
-    QLabel           m_goose;
-    // tray FIXME: что с этим говном? оно живет столько же сколько приложение, поэтому фиг с ней?
+    quint16                              m_port;
+    quint32                              m_data_size = 0;
+    bool                                 m_message_flag = true;
+    QSystemTrayIcon*                     m_tray_icon;
+    RestAutoupdater                      m_autoupdater;
+    QLabel                               m_goose;
     QString                              m_address;
     QString                              m_name;
     QMap<QString, QPair<QString, QTime>> m_resList; //!< <имя ресурса, <пользователь, время использования>>
@@ -87,7 +79,6 @@ private:
     QJsonParseError                      jsonErr;
     QTcpSocket*                          socket;
     QTimer                               timer;
-    QTimer                               reconnectTimer;
     QByteArray                           m_buff;
     quint32                              reconnect_sec = 0;
 };

@@ -86,6 +86,7 @@
      </property>
      <addaction name="send_goose"/>
     </widget>
+    <addaction name="check_updates"/>
     <addaction name="change_name"/>
     <addaction name="change_host"/>
     <addaction name="tray_en"/>
@@ -123,6 +124,11 @@
   <action name="send_goose">
    <property name="text">
     <string>Отправить гуся</string>
+   </property>
+  </action>
+  <action name="check_updates">
+   <property name="text">
+    <string>Проверить обновления</string>
    </property>
   </action>
  </widget>

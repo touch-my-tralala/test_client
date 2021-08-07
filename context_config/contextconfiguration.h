@@ -4,6 +4,9 @@
 #include <QVariantMap>
 #include <QSettings>
 #include <QDir>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 
 #include "json_keys/keys.h"
 
@@ -25,7 +28,6 @@ protected:
     virtual ~BaseContextConfiguration();
 
 protected:
-//    static QSettings* m_settings; // FIXNE:: так вобще делается?
     QVariantMap params;
     QSettings* m_sett;
 };
@@ -40,16 +42,6 @@ public:
     bool writeConfiguration() override;
 };
 
-//! Загрузка данных для системы автообновлений
-class UpdaterContextConfiguration : public BaseContextConfiguration{
-
-public:
-    UpdaterContextConfiguration();
-    ~UpdaterContextConfiguration();
-    bool loadConfiguration(QSettings* sett) override;
-    bool writeConfiguration() override;
-};
-
 //! Загрузка общих данных
 class CommonContextConfiguration : public BaseContextConfiguration{
 
@@ -59,7 +51,6 @@ public:
     bool loadConfiguration(QSettings* sett) override;
     bool writeConfiguration() override;
 };
-
 
 
 #endif // CONTEXTCONFIGURATION_H
