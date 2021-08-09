@@ -33,7 +33,7 @@ void MainWindow::init()
     m_user_config.loadConfiguration(sett);
     m_common_config.loadConfiguration(sett);
 
-    m_port = static_cast<quint16>(m_common_config.getConfigParam(KEYS::Config().port).toUInt());
+    m_port    = static_cast<quint16>(m_common_config.getConfigParam(KEYS::Config().port).toUInt());
     m_address = m_common_config.getConfigParam(KEYS::Config().address).toString();
 
     m_name = m_user_config.getConfigParam(KEYS::Config().name).toString();
@@ -41,6 +41,7 @@ void MainWindow::init()
     // Настройка автоапдейтера
     m_autoupdater.setRepo("touch-my-tralala/pcma_detector");
     m_autoupdater.setSavePath(QDir::currentPath() + "/updates");
+    connect(&m_autoupdater, &RestAutoupdater::success, this, &MainWindow::update_successfull_load);
     //m_autoupdater.loadUpdates();
 
     // Таймер времени переподключения
@@ -68,7 +69,7 @@ void MainWindow::build_interface()
     m_tray_icon = new QSystemTrayIcon(this);
     m_tray_icon->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
     // FIXME: так можно оставить?
-    QMenu* menu        = new QMenu(this);
+    QMenu*   menu        = new QMenu(this);
     QAction* view_window = new QAction("Открыть", this);
     QAction* quit_app    = new QAction("Выход", this);
 
@@ -162,7 +163,6 @@ void MainWindow::slotSockReady()
             readStream >> m_data_size;
         }
 
-
         if (socket->bytesAvailable() < m_data_size)
             return;
 
@@ -182,7 +182,6 @@ void MainWindow::slotSockReady()
             qDebug() << "Ошибка json-формата" << jsonErr.errorString();
 
         m_buff.clear();
-
     }
 }
 
@@ -205,7 +204,8 @@ void MainWindow::json_handler(const QJsonObject& jObj)
     if (jType == KEYS::Json().connect_fail)
         fail_to_connect();
 
-    if (jType == KEYS::Json().goose){
+    if (jType == KEYS::Json().goose)
+    {
         m_goose.show();
         QTimer::singleShot(1000, this, &MainWindow::show_goose);
     }
@@ -238,7 +238,7 @@ void MainWindow::table_info_update(const QJsonObject& jObj)
     QJsonArray resArr = jObj[KEYS::Json().resources].toArray();
     QString    user, res;
     qint32     time;
-    for (const auto &i : qAsConst(resArr))
+    for (const auto& i : qAsConst(resArr))
     {
         auto obj = i.toObject();
         res      = obj[KEYS::Json().res_name].toString();
@@ -254,7 +254,7 @@ void MainWindow::res_intercept(const QJsonObject& jObj)
     auto grabResNum = jObj[KEYS::Json().resources].toArray();
 
     QString respocne = "Resources num:";
-    for (const auto &i : qAsConst(grabResNum))
+    for (const auto& i : qAsConst(grabResNum))
         respocne += i.toString() + ", ";
 
     respocne.remove(respocne.size() - 2, 2);
@@ -269,7 +269,7 @@ void MainWindow::req_responce(const QJsonObject& jObj)
 
     QString res, responce = "", take = "", notTake = "";
     bool    answer;
-    for (const auto &i : qAsConst(jArr))
+    for (const auto& i : qAsConst(jArr))
     {
         auto obj = i.toObject();
         res      = obj[KEYS::Json().res_name].toString();
@@ -366,7 +366,7 @@ void MainWindow::on_takeButton_clicked()
     if (selected_list.size() > 0)
     {
         QJsonArray jArr;
-        for (const auto &i : qAsConst(selected_list))
+        for (const auto& i : qAsConst(selected_list))
             jArr << i;
 
         qint32 curTime = QTime(0, 0, 0).secsTo(QTime::currentTime());
@@ -445,4 +445,14 @@ void MainWindow::on_send_goose_triggered()
         auto obj = goose_widget->getSendObj();
         send_to_host(obj);
     }
+}
+
+void MainWindow::on_check_updates_triggered()
+{
+    m_autoupdater.loadUpdates();
+}
+
+void MainWindow::update_successfull_load()
+{
+    qDebug() << "update ok";
 }

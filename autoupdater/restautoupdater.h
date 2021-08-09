@@ -1,14 +1,13 @@
 #ifndef RESTAUTOUPDATER_H
 #define RESTAUTOUPDATER_H
 
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QJsonArray>
-#include <QJsonObject>
-#include <QJsonDocument>
-#include <QFileInfo>
-
 
 //! \class Класс для автообновления с помощью GitHub Rest API
 //! \brief
@@ -16,14 +15,16 @@ class RestAutoupdater : public QObject
 {
     Q_OBJECT
 
-    enum Type{
+    enum Type
+    {
         CONTENTS = 0,
         DIR      = 1,
         FILE     = 2
     };
 
 public:
-    struct Keys{
+    struct Keys
+    {
         const QString git_rest_api = "https://api.github.com/repos/";
         const QString file_info    = "updates_info.json";
         const QString sha          = "sha";
@@ -32,42 +33,43 @@ public:
         const QString type         = "type";
         const QString file_path    = "path";
         const QString download_url = "download_url";
-    }KEYS;
+    } KEYS;
 
 public:
-    RestAutoupdater(QObject *parent = nullptr);
+    RestAutoupdater(QObject* parent = nullptr);
     //! \brief Установка репозитория для проверки обновлений
-    virtual void setRepo(const QString &repo);
+    void setRepo(const QString& repo);
     //! \brief Установка пути, куда будут скачиваться обновления
     //! \param[path] путь обновлений. Должен быть директорией.
-    virtual bool setSavePath(const QString &path);
+    bool setSavePath(const QString& path);
     //! \brief Проверяет необходимость обновления и скачивает если необходимо.
-    virtual void loadUpdates();
+    void loadUpdates();
     //! \brief Получить имена файлов которые обновились
-    QStringList getUpdatedFiles(){return m_updated_files;}
+    QStringList getUpdatedFiles() { return m_updated_files; }
 
 signals:
     //! \brief излучается всякий раз, когда загрузка обновлений прошла успешно
     void success();
     //! \brief излучается при возникновении ошибки
-    void error(const QString &err);
+    void error(const QString& err);
 
 protected:
-    virtual void send_request(Type type = CONTENTS, const QString &reqStr = "");
-    virtual void get_responce(QNetworkReply* reply);
-    virtual QJsonDocument read_local_info(const QString &name);
-    virtual void responce_handler(const QJsonDocument &doc);
-    virtual void download_manager(const QJsonObject &obj);
-    virtual void download_file(QNetworkReply* reply);
+    void          send_request(Type type = CONTENTS, const QString& reqStr = "");
+    void          get_responce(QNetworkReply* reply);
+    QJsonDocument read_local_info(const QString& name);
+    void          write_local_info(const QJsonArray& arr);
+    void          responce_handler(const QJsonDocument& doc);
+    void          download_manager(const QJsonObject& obj);
+    void          download_file(QNetworkReply* reply);
 
 private:
-    QString m_repo;
-    QString m_save_path;
+    QString                m_repo;
+    QString                m_save_path;
     QNetworkAccessManager* m_manager;
     QNetworkAccessManager* m_file_manager;
-    QJsonParseError jsonErr;
-    QStringList m_current_file_name;
-    QStringList m_updated_files;
+    QJsonParseError        jsonErr;
+    QStringList            m_current_file_name;
+    QStringList            m_updated_files;
 };
 
 #endif // RESTAUTOUPDATER_H
