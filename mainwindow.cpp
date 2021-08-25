@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include "ui_mainwindow.h"
+#include "widgets/updateinputdialog.h"
 
 // 4) нормальная система авторизация (низкий приоритет)
 
@@ -39,9 +40,10 @@ void MainWindow::init()
     m_name = m_user_config.getConfigParam(KEYS::Config().name).toString();
 
     // Настройка автоапдейтера
-    m_autoupdater.setRepo("touch-my-tralala/pcma_detector");
+    m_autoupdater.setRepo("touch-my-tralala/bpos_trecker");
     m_autoupdater.setSavePath(QDir::currentPath() + "/updates");
     connect(&m_autoupdater, &RestAutoupdater::success, this, &MainWindow::update_successfull_load);
+    // Первичная проверка обновлений при запуске.
     //m_autoupdater.loadUpdates();
 
     // Таймер времени переподключения
@@ -454,5 +456,10 @@ void MainWindow::on_check_updates_triggered()
 
 void MainWindow::update_successfull_load()
 {
-    qDebug() << "update ok";
+    /*QSharedPointer<UpdateInputDialog> dialog = QSharedPointer<UpdateInputDialog>(new UpdateInputDialog);
+    if (dialog->exec() == QDialog::Accepted)
+    {
+        qDebug() << "ok";
+    }*/
+    qDebug() << "ok";
 }

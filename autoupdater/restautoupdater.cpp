@@ -1,5 +1,7 @@
 #include "restautoupdater.h"
 
+// TODO: надо сделать чтобы все сохранялось по папкам, как лежало до этого. Сейчас все скидывается в одну кучу.
+
 RestAutoupdater::RestAutoupdater(QObject* parent)
     : QObject(parent)
 {
@@ -29,7 +31,7 @@ bool RestAutoupdater::setSavePath(const QString& path)
 
 void RestAutoupdater::loadUpdates()
 {
-    send_request();
+    send_request(CONTENTS);
 }
 
 void RestAutoupdater::send_request(Type type, const QString& reqStr)

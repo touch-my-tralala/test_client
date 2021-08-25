@@ -27,6 +27,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 CONFIG += c++11
 
 SOURCES += \
+        autoupdater/batfilecreator.cpp \
         autoupdater/restautoupdater.cpp \
         context_config/contextconfiguration.cpp \
         main.cpp \
@@ -34,9 +35,11 @@ SOURCES += \
         table_model/mytablewidget.cpp \
         table_model/tablemodel.cpp \
         widgets/hostinputdialog.cpp \
-        widgets/sendgoosewidget.cpp
+        widgets/sendgoosewidget.cpp \
+        widgets/updateinputdialog.cpp
 
 HEADERS += \
+        autoupdater/batfilecreator.h \
         autoupdater/restautoupdater.h \
         context_config/contextconfiguration.h \
         json_keys/keys.h \
@@ -44,7 +47,8 @@ HEADERS += \
         table_model/mytablewidget.h \
         table_model/tablemodel.h \
         widgets/hostinputdialog.h \
-        widgets/sendgoosewidget.h
+        widgets/sendgoosewidget.h \
+        widgets/updateinputdialog.h
 
 FORMS += \
         mainwindow.ui
