@@ -31,7 +31,7 @@ public:
         const QString url          = "url";
         const QString name         = "name";
         const QString type         = "type";
-        const QString file_path    = "path";
+        const QString path         = "path";
         const QString download_url = "download_url";
     } KEYS;
 
@@ -61,6 +61,10 @@ protected:
     void          responce_handler(const QJsonDocument& doc);
     void          download_manager(const QJsonObject& obj);
     void          download_file(QNetworkReply* reply);
+    void          download_all(const QJsonArray& arr);
+    //! \brief Загрузка недостающих или отличных файлов из удаленного репозитория
+    void download_missing(const QJsonArray& local_arr, const QJsonArray& remote_arr);
+    void clear_whole_dir();
 
 private:
     QString                m_repo;
@@ -68,7 +72,7 @@ private:
     QNetworkAccessManager* m_manager;
     QNetworkAccessManager* m_file_manager;
     QJsonParseError        jsonErr;
-    QStringList            m_current_file_name;
+    QStringList            m_current_files_path;
     QStringList            m_updated_files;
 };
 

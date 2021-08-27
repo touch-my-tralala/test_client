@@ -1,6 +1,8 @@
 #include "restautoupdater.h"
 
-// TODO: надо сделать чтобы все сохранялось по папкам, как лежало до этого. Сейчас все скидывается в одну кучу.
+#include <QDir>
+
+// TODO: Файл с содержанием загружается не верно.
 
 RestAutoupdater::RestAutoupdater(QObject* parent)
     : QObject(parent)
@@ -75,8 +77,8 @@ void RestAutoupdater::download_file(QNetworkReply* reply)
     auto data = reply->readAll();
 
     // Возможно это и не надо делать. Но я подумал, что пока один файл отправляется тут могут обработаться другие файлы и возникнет говна-пирога.
-    auto name = m_save_path + "/" + m_current_file_name.first();
-    m_current_file_name.removeFirst();
+    auto name = m_save_path + "/" + m_current_files_path.first();
+    m_current_files_path.removeFirst();
     QFile file(name);
     if (!file.open(QIODevice::WriteOnly))
     {
@@ -93,49 +95,21 @@ void RestAutoupdater::download_file(QNetworkReply* reply)
 void RestAutoupdater::responce_handler(const QJsonDocument& doc)
 {
     m_updated_files.clear();
-    auto arr       = doc.array();
-    auto local_doc = read_local_info(Keys().file_info);
-    auto local_arr = local_doc.array();
+    auto remote_arr = doc.array();
+    auto local_doc  = read_local_info(Keys().file_info);
+    auto local_arr  = local_doc.array();
 
-    if (local_doc.isEmpty() || arr.size() != local_arr.size())
+    if (local_doc.isEmpty() || local_arr != remote_arr)
     {
-        write_local_info(arr);
-
-        for (const auto& i : qAsConst(arr))
-        {
-            auto obj = i.toObject();
-            download_manager(obj);
-
-            if (obj[Keys().type].toString() != "dir")
-            {
-                m_updated_files << obj[Keys().name].toString();
-                m_current_file_name << obj[Keys().name].toString();
-            }
-        }
+        download_all(remote_arr);
         emit success();
         return;
     }
 
-    auto j = local_arr.begin();
-    for (auto i = arr.begin(), e = arr.end(); i != e; i++)
-    {
-        auto remote_obj = i->toObject();
-        auto local_obj  = j->toObject();
+    download_missing(local_arr, remote_arr);
 
-        if (remote_obj[Keys().sha] != local_obj[Keys().sha])
-        {
-            download_manager(remote_obj);
-
-            if (remote_obj[Keys().type].toString() != "dir")
-            {
-                m_updated_files << remote_obj[Keys().name].toString();
-                m_current_file_name << remote_obj[Keys().name].toString();
-            }
-        }
-        j++;
-    }
-
-    // Если есть файлы для обновления
+    // Если есть файлы для обновления FIXME: по идее когда эта фигна будет ходить по папкам, для каждой
+    // папки будет излучаться сигнал. А надо чтобы он излучался 1 раз в самом конце
     if (m_updated_files.size() > 0)
         emit success();
 }
@@ -173,4 +147,57 @@ void RestAutoupdater::download_manager(const QJsonObject& obj)
         send_request(DIR, obj[Keys().url].toString());
     else
         send_request(FILE, obj[Keys().download_url].toString());
+}
+
+void RestAutoupdater::download_missing(const QJsonArray& local_arr, const QJsonArray& remote_arr)
+{
+    auto j = local_arr.begin();
+    for (auto i = remote_arr.begin(), e = remote_arr.end(); i != e; i++)
+    {
+        auto remote_obj = i->toObject();
+        auto local_obj  = j->toObject();
+
+        if (remote_obj[Keys().sha] != local_obj[Keys().sha])
+        {
+            download_manager(remote_obj);
+
+            if (remote_obj[Keys().type].toString() != "dir")
+            {
+                m_updated_files << remote_obj[Keys().name].toString();
+                m_current_files_path << remote_obj[Keys().path].toString();
+            }
+        }
+        j++;
+    }
+
+    write_local_info(remote_arr);
+}
+
+void RestAutoupdater::download_all(const QJsonArray& arr)
+{
+    clear_whole_dir();
+    write_local_info(arr);
+
+    for (const auto& i : qAsConst(arr))
+    {
+        auto obj = i.toObject();
+        download_manager(obj);
+
+        if (obj[Keys().type].toString() != "dir")
+        {
+            m_updated_files << obj[Keys().name].toString();
+            m_current_files_path << obj[Keys().path].toString();
+        }
+    }
+}
+
+void RestAutoupdater::clear_whole_dir()
+{
+    QDir dir(m_save_path);
+    dir.setFilter(QDir::Files | QDir::Dirs);
+    for (const auto& i : dir.entryList())
+    {
+        if (i != Keys().file_info)
+            dir.remove(i);
+    }
 }
