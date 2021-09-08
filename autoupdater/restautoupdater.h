@@ -1,8 +1,12 @@
 #ifndef RESTAUTOUPDATER_H
 #define RESTAUTOUPDATER_H
 
+#include <QJsonObject>
 #include <QJsonParseError>
 #include <QNetworkReply>
+
+//! TODO: 1) Удаление дирректорий если в них нет содержимого
+//! 2) Откуда взялись элементы "." и ".." в списке от entryList
 
 //! \class Класс для автообновления с помощью GitHub Rest API
 //! \brief
@@ -39,8 +43,6 @@ public:
     bool setSavePath(const QString& path);
     //! \brief Проверяет необходимость обновления и скачивает если необходимо.
     void loadUpdates();
-    //! \brief Получить имена файлов которые обновились
-    QStringList getUpdatedFiles() { return m_updated_files; }
 
 signals:
     //! \brief излучается всякий раз, когда загрузка обновлений прошла успешно
@@ -49,27 +51,28 @@ signals:
     void error(const QString& err);
 
 protected:
-    void          send_request(Type type = CONTENTS, const QString& reqStr = "");
-    void          get_responce(QNetworkReply* reply);
-    QJsonDocument read_local_info(const QString& name);
-    void          write_local_info(const QJsonArray& arr);
-    void          responce_handler(const QJsonDocument& doc);
-    void          download_manager(const QJsonObject& obj);
-    void          download_file(QNetworkReply* reply);
-    void          download_all(const QJsonArray& arr);
+    void                       send_request(Type type = CONTENTS, const QString& reqStr = "");
+    void                       get_responce(QNetworkReply* reply);
+    QMap<QString, QJsonObject> read_local_info();
+    void                       write_local_info();
+    void                       download_manager();
+    void                       download_file(QNetworkReply* reply);
     //! \brief Загрузка недостающих или отличных файлов из удаленного репозитория
     void download_missing(const QJsonArray& local_arr, const QJsonArray& remote_arr);
-    void clear_whole_dir();
+    //! \brief Удаление неиспользуемых файлов
+    void remove_excess();
+    //! \brief Обход всей дирректории и сбор в лист всех файлов.
+    void collecting_file_info(const QJsonArray& arr);
 
 private:
-    bool                   m_info_is_writable = true;
     QString                m_repo;
     QString                m_save_path;
     QNetworkAccessManager* m_manager;
     QNetworkAccessManager* m_file_manager;
     QJsonParseError        jsonErr;
-    QStringList            m_current_files_path;
-    QStringList            m_updated_files;
+    QStringList            m_download_files_path;
+    QList<QJsonObject>     m_dir_queue;
+    QList<QJsonObject>     m_file_queue;
 };
 
 #endif // RESTAUTOUPDATER_H

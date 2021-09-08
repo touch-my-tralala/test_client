@@ -2,8 +2,9 @@
 
 #include <QDir>
 #include <QJsonArray>
-#include <QJsonObject>
 #include <QNetworkAccessManager>
+
+#include "autoupdater/batfilecreator.h"
 
 RestAutoupdater::RestAutoupdater(QObject* parent)
     : QObject(parent)
@@ -34,7 +35,6 @@ bool RestAutoupdater::setSavePath(const QString& path)
 
 void RestAutoupdater::loadUpdates()
 {
-    m_info_is_writable = true;
     send_request(CONTENTS);
 }
 
@@ -45,6 +45,8 @@ void RestAutoupdater::send_request(Type type, const QString& reqStr)
     switch (type)
     {
         case (CONTENTS):
+            m_file_queue.clear();
+            m_download_files_path.clear();
             request.setUrl(m_repo + reqStr);
             m_manager->get(request);
             break;
@@ -66,21 +68,117 @@ void RestAutoupdater::get_responce(QNetworkReply* reply)
     auto doc = QJsonDocument::fromJson(reply->readAll(), &jsonErr);
 
     if (jsonErr.error == QJsonParseError::NoError)
-        responce_handler(doc);
+    {
+        auto remote_arr = doc.array();
+        collecting_file_info(remote_arr);
+    }
     else
         emit error(jsonErr.errorString());
 
     reply->deleteLater();
 }
 
-//! TODO: надо наверное сделать чтение блоками, да и вообще разобраться с тем как сюда большие данные приходят
+void RestAutoupdater::collecting_file_info(const QJsonArray& arr)
+{
+    for (const auto& i : qAsConst(arr))
+    {
+        auto obj = i.toObject();
+        if (obj[Keys().type].toString() == "dir")
+            m_dir_queue.append(obj);
+        else
+            m_file_queue.append(obj);
+    }
+
+    if (!m_dir_queue.isEmpty())
+    {
+        auto obj = m_dir_queue.takeFirst();
+        QDir().mkdir(m_save_path + "/" + obj[Keys().path].toString());
+        send_request(DIR, obj[Keys().url].toString());
+    }
+    else
+    {
+        download_manager();
+    }
+}
+
+void RestAutoupdater::download_manager()
+{
+    auto local_info = read_local_info();
+
+    for (const auto& i : qAsConst(m_file_queue))
+    {
+        auto obj  = i;
+        auto name = obj[Keys().name].toString();
+
+        if (local_info.contains(name))
+        {
+            auto local_obj = local_info[name];
+            if (local_obj[Keys().sha] == obj[Keys().sha] && local_obj[Keys().path] == obj[Keys().path])
+                continue;
+
+            m_download_files_path << obj[Keys().path].toString();
+            send_request(FILE, obj[Keys().download_url].toString());
+        }
+        else
+        {
+            m_download_files_path << obj[Keys().path].toString();
+            send_request(FILE, obj[Keys().download_url].toString());
+        }
+    }
+
+    // удаление лишних элементов, которые больше не используются.
+    remove_excess();
+    // запись нового локального инфармационного файла
+    write_local_info();
+}
+
+QMap<QString, QJsonObject> RestAutoupdater::read_local_info()
+{
+    QFile file(m_save_path + "/" + Keys().file_info);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        qDebug() << "update_info.json not open";
+        return {};
+    }
+
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+
+    QMap<QString, QJsonObject> out;
+    auto                       arr = doc.array();
+
+    for (const auto& i : qAsConst(arr))
+    {
+        auto obj = i.toObject();
+        out.insert(obj[Keys().name].toString(), obj);
+    }
+
+    return out;
+}
+
+void RestAutoupdater::write_local_info()
+{
+    QFile file(m_save_path + "/" + Keys().file_info);
+    if (!file.open(QIODevice::WriteOnly))
+    {
+        emit error("cant write file_info.json");
+        return;
+    }
+
+    QJsonArray arr;
+    for (const auto& i : qAsConst(m_file_queue))
+        arr << i;
+
+    file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
+    file.close();
+}
+
 void RestAutoupdater::download_file(QNetworkReply* reply)
 {
     auto data = reply->readAll();
 
     // Возможно это и не надо делать. Но я подумал, что пока один файл отправляется тут могут обработаться другие файлы и возникнет говна-пирога.
-    auto name = m_save_path + "/" + m_current_files_path.first();
-    m_current_files_path.removeFirst();
+    auto  name = m_save_path + "/" + m_download_files_path.takeFirst();
     QFile file(name);
     if (!file.open(QIODevice::WriteOnly))
     {
@@ -91,120 +189,59 @@ void RestAutoupdater::download_file(QNetworkReply* reply)
     file.write(data);
     file.close();
 
+    if (m_download_files_path.isEmpty())
+    {
+        BatFileCreator bat;
+        bat.create();
+        emit success();
+    }
+
     reply->deleteLater();
 }
 
-void RestAutoupdater::responce_handler(const QJsonDocument& doc)
+void RestAutoupdater::remove_excess()
 {
-    m_updated_files.clear();
-    auto remote_arr = doc.array();
-    auto local_doc  = read_local_info(Keys().file_info);
-    auto local_arr  = local_doc.array();
+    QStringList files;
+    for (const auto& i : qAsConst(m_file_queue))
+        files << i[Keys().name].toString();
 
-    if (local_doc.isEmpty() || local_arr != remote_arr)
-        download_all(remote_arr);
-    //else
-    //    download_missing(local_arr, remote_arr);
+    files << Keys().file_info;
 
-    // Если есть файлы для обновления FIXME: по идее когда эта фигна будет ходить по папкам, для каждой
-    // папки будет излучаться сигнал. А надо чтобы он излучался 1 раз в самом конце
-    if (m_updated_files.size() > 0)
-        emit success();
-}
+    std::function<void(QString)> remove_dir_contets = [files, &remove_dir_contets](const QString& dirName) {
+        QDir dir(dirName);
 
-QJsonDocument RestAutoupdater::read_local_info(const QString& name)
-{
-    QFile file(m_save_path + "/" + name);
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        qDebug() << "update_info.json not open";
-        return QJsonDocument();
-    }
+        if (!dir.exists())
+            return;
 
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    file.close();
-    return doc;
-}
+        dir.setFilter(QDir::Files);
+        for (const auto& i : dir.entryList())
+            if (!files.contains(i))
+                dir.remove(i);
 
-void RestAutoupdater::write_local_info(const QJsonArray& arr)
-{
-    QFile file(m_save_path + "/" + Keys().file_info);
-    if (!file.open(QIODevice::WriteOnly))
-    {
-        emit error("cant write file_info.json");
-        return;
-    }
-
-    file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
-    file.close();
-}
-
-void RestAutoupdater::download_manager(const QJsonObject& obj)
-{
-    if (obj[Keys().type].toString() == "dir")
-    {
-        QDir().mkdir(m_save_path + "/" + obj[Keys().path].toString());
-        send_request(DIR, obj[Keys().url].toString());
-    }
-    else
-        send_request(FILE, obj[Keys().download_url].toString());
-}
-
-void RestAutoupdater::download_missing(const QJsonArray& local_arr, const QJsonArray& remote_arr)
-{
-    auto j = local_arr.begin();
-    for (auto i = remote_arr.begin(), e = remote_arr.end(); i != e; i++)
-    {
-        auto remote_obj = i->toObject();
-        auto local_obj  = j->toObject();
-
-        if (remote_obj[Keys().sha] != local_obj[Keys().sha])
+        dir.setFilter(QDir::Dirs);
+        auto subdirs = dir.entryList();
+        for (const auto& i : qAsConst(subdirs))
         {
-            download_manager(remote_obj);
-
-            if (remote_obj[Keys().type].toString() != "dir")
-            {
-                m_updated_files << remote_obj[Keys().name].toString();
-                m_current_files_path << remote_obj[Keys().path].toString();
-            }
+            if (i == "." || i == "..")
+                continue;
+            remove_dir_contets(dirName + "/" + i);
         }
-        j++;
-    }
+    };
 
-    write_local_info(remote_arr);
-}
-
-void RestAutoupdater::download_all(const QJsonArray& arr)
-{
-    if (m_info_is_writable)
-    {
-        clear_whole_dir();
-        write_local_info(arr);
-    }
-
-    m_info_is_writable = false;
-
-    for (const auto& i : qAsConst(arr))
-    {
-        auto obj = i.toObject();
-        download_manager(obj);
-
-        if (obj[Keys().type].toString() != "dir")
-        {
-            m_updated_files << obj[Keys().name].toString();
-            m_current_files_path << obj[Keys().path].toString();
-        }
-    }
-}
-
-// FIXME:: почему-то не удаляет все из папки
-void RestAutoupdater::clear_whole_dir()
-{
     QDir dir(m_save_path);
-    dir.setFilter(QDir::Files | QDir::Dirs);
-    for (const auto& i : dir.entryList())
+    dir.setFilter(QDir::Dirs);
+    auto dirs = dir.entryList();
+    dirs << m_save_path;
+
+    for (const auto& i : qAsConst(dirs))
     {
-        if (i != Keys().file_info)
-            dir.remove(i);
+        // хрен знае откуда в списке беруться папки с таким именем
+        if (i == "." || i == "..")
+            continue;
+
+        if (i != m_save_path)
+            remove_dir_contets(m_save_path + "/" + i);
+        else
+            remove_dir_contets(m_save_path);
     }
 }

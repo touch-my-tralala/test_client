@@ -9,8 +9,6 @@ public:
     BatFileCreator();
     //! \brief Установка пути, где будет сохранен файл и его имени
     void setName(const QString& path);
-
-private:
     void create();
 
 private:

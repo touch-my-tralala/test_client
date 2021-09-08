@@ -40,7 +40,7 @@ void MainWindow::init()
     m_name = m_user_config.getConfigParam(KEYS::Config().name).toString();
 
     // Настройка автоапдейтера
-    m_autoupdater.setRepo("touch-my-tralala/bpos_trecker");
+    m_autoupdater.setRepo("touch-my-tralala/pcma_detector");
     m_autoupdater.setSavePath(QDir::currentPath() + "/updates");
     connect(&m_autoupdater, &RestAutoupdater::success, this, &MainWindow::update_successfull_load);
     // Первичная проверка обновлений при запуске.
