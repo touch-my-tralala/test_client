@@ -1,13 +1,8 @@
 #ifndef RESTAUTOUPDATER_H
 #define RESTAUTOUPDATER_H
 
-#include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QNetworkAccessManager>
+#include <QJsonParseError>
 #include <QNetworkReply>
-#include <QNetworkRequest>
 
 //! \class Класс для автообновления с помощью GitHub Rest API
 //! \brief
@@ -67,6 +62,7 @@ protected:
     void clear_whole_dir();
 
 private:
+    bool                   m_info_is_writable = true;
     QString                m_repo;
     QString                m_save_path;
     QNetworkAccessManager* m_manager;

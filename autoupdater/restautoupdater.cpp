@@ -1,8 +1,9 @@
 #include "restautoupdater.h"
 
 #include <QDir>
-
-// TODO: Файл с содержанием загружается не верно.
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QNetworkAccessManager>
 
 RestAutoupdater::RestAutoupdater(QObject* parent)
     : QObject(parent)
@@ -33,6 +34,7 @@ bool RestAutoupdater::setSavePath(const QString& path)
 
 void RestAutoupdater::loadUpdates()
 {
+    m_info_is_writable = true;
     send_request(CONTENTS);
 }
 
@@ -100,13 +102,9 @@ void RestAutoupdater::responce_handler(const QJsonDocument& doc)
     auto local_arr  = local_doc.array();
 
     if (local_doc.isEmpty() || local_arr != remote_arr)
-    {
         download_all(remote_arr);
-        emit success();
-        return;
-    }
-
-    download_missing(local_arr, remote_arr);
+    //else
+    //    download_missing(local_arr, remote_arr);
 
     // Если есть файлы для обновления FIXME: по идее когда эта фигна будет ходить по папкам, для каждой
     // папки будет излучаться сигнал. А надо чтобы он излучался 1 раз в самом конце
@@ -144,7 +142,10 @@ void RestAutoupdater::write_local_info(const QJsonArray& arr)
 void RestAutoupdater::download_manager(const QJsonObject& obj)
 {
     if (obj[Keys().type].toString() == "dir")
+    {
+        QDir().mkdir(m_save_path + "/" + obj[Keys().path].toString());
         send_request(DIR, obj[Keys().url].toString());
+    }
     else
         send_request(FILE, obj[Keys().download_url].toString());
 }
@@ -175,8 +176,13 @@ void RestAutoupdater::download_missing(const QJsonArray& local_arr, const QJsonA
 
 void RestAutoupdater::download_all(const QJsonArray& arr)
 {
-    clear_whole_dir();
-    write_local_info(arr);
+    if (m_info_is_writable)
+    {
+        clear_whole_dir();
+        write_local_info(arr);
+    }
+
+    m_info_is_writable = false;
 
     for (const auto& i : qAsConst(arr))
     {
@@ -191,6 +197,7 @@ void RestAutoupdater::download_all(const QJsonArray& arr)
     }
 }
 
+// FIXME:: почему-то не удаляет все из папки
 void RestAutoupdater::clear_whole_dir()
 {
     QDir dir(m_save_path);
